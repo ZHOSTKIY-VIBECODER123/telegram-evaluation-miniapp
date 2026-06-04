@@ -5,6 +5,7 @@ export interface Employee {
   id: string;
   name: string;
   role: string;
+  canEvaluate?: boolean;
 }
 
 export function useEmployees() {
@@ -31,6 +32,7 @@ export function useEmployees() {
             id: String(e.id),
             name: e.full_name,
             role: e.role,
+            canEvaluate: e.can_evaluate,
           }))
         );
       } catch (err: unknown) {
