@@ -11,6 +11,8 @@ interface EvaluationContextType {
   setSelectedChecklist: (checklist: Checklist | null) => void;
   selectedEmployee: Employee | null;
   setSelectedEmployee: (employee: Employee | null) => void;
+  selectedEvaluator: Employee | null;
+  setSelectedEvaluator: (employee: Employee | null) => void;
   answers: Record<number, Answer>;
   setAnswer: (questionIndex: number, answer: Answer) => void;
   currentQuestionIndex: number;
@@ -23,6 +25,7 @@ const EvaluationContext = createContext<EvaluationContextType | undefined>(undef
 export function EvaluationProvider({ children }: { children: ReactNode }) {
   const [selectedChecklist, setSelectedChecklist] = useState<Checklist | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [selectedEvaluator, setSelectedEvaluator] = useState<Employee | null>(null);
   const [answers, setAnswers] = useState<Record<number, Answer>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
@@ -33,6 +36,7 @@ export function EvaluationProvider({ children }: { children: ReactNode }) {
   const reset = useCallback(() => {
     setSelectedChecklist(null);
     setSelectedEmployee(null);
+    setSelectedEvaluator(null);
     setAnswers({});
     setCurrentQuestionIndex(0);
   }, []);
@@ -44,6 +48,8 @@ export function EvaluationProvider({ children }: { children: ReactNode }) {
         setSelectedChecklist,
         selectedEmployee,
         setSelectedEmployee,
+        selectedEvaluator,
+        setSelectedEvaluator,
         answers,
         setAnswer,
         currentQuestionIndex,

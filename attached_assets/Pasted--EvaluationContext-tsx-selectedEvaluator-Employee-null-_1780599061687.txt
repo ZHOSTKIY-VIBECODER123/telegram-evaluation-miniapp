@@ -1,0 +1,116 @@
+В EvaluationContext.tsx добавить:
+
+В интерфейс
+selectedEvaluator: Employee | null;
+setSelectedEvaluator: (employee: Employee | null) => void;
+В состояния
+
+После:
+
+const [selectedEmployee, setSelectedEmployee] =
+  useState<Employee | null>(null);
+
+добавить:
+
+const [selectedEvaluator, setSelectedEvaluator] =
+  useState<Employee | null>(null);
+В value
+
+Добавить:
+
+selectedEvaluator,
+setSelectedEvaluator,
+В reset()
+
+Добавить:
+
+setSelectedEvaluator(null);
+Затем в EmployeeSelection
+
+После строки:
+
+const { selectedChecklist, setSelectedEmployee } = useEvaluation();
+
+заменить на:
+
+const {
+  selectedChecklist,
+  setSelectedEmployee,
+  selectedEvaluator,
+  setSelectedEvaluator,
+} = useEvaluation();
+Далее
+
+После:
+
+const { employees, loading, error } = useEmployees();
+
+добавить:
+
+const evaluators = employees.filter((e) => e.canEvaluate);
+И самое важное
+
+Заменить текущий:
+
+const filteredEmployees = employees.filter(...)
+
+на:
+
+const filteredEmployees = employees.filter((emp) => {
+  if (emp.canEvaluate) return false;
+
+  if (!selectedEvaluator) return false;
+
+  if (selectedEvaluator.role === "Team Leader") {
+    return emp.role === "Менеджер по привлечению партнеров";
+  }
+
+  if (selectedEvaluator.name === "Диер О") {
+    return emp.role === "Team Leader";
+  }
+
+  if (selectedEvaluator.name === "Азамат") {
+    return emp.name === "Диер О";
+  }
+
+  return false;
+}).filter(
+  (emp) =>
+    emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    emp.role.toLowerCase().includes(searchQuery.toLowerCase())
+);
+И добавить селектор оценщика
+
+Сразу под заголовком:
+
+<h1 className="text-xl font-bold tracking-tight">
+
+добавить блок:
+
+<div className="mt-3">
+  <label className="text-sm font-medium">
+    Кто проводит оценку
+  </label>
+
+  <select
+    className="w-full mt-2 border rounded-md p-2"
+    value={selectedEvaluator?.id || ""}
+    onChange={(e) => {
+      const evaluator = evaluators.find(
+        (x) => x.id === e.target.value
+      );
+
+      if (evaluator) {
+        setSelectedEvaluator(evaluator);
+      }
+    }}
+  >
+    <option value="">Выберите сотрудника</option>
+
+    {evaluators.map((e) => (
+      <option key={e.id} value={e.id}>
+        {e.name}
+      </option>
+    ))}
+  </select>
+</div>

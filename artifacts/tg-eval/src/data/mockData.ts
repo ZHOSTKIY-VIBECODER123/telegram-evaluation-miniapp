@@ -14,6 +14,7 @@ export interface Employee {
   id: string;
   name: string;
   role: string;
+  canEvaluate?: boolean;
 }
 
 export const CHECKLISTS: Checklist[] = [

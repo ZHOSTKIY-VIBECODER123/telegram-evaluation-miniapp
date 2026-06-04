@@ -11,9 +11,16 @@ import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 
 export default function EmployeeSelection() {
   const [, setLocation] = useLocation();
-  const { selectedChecklist, setSelectedEmployee } = useEvaluation();
+  const {
+    selectedChecklist,
+    setSelectedEmployee,
+    selectedEvaluator,
+    setSelectedEvaluator,
+  } = useEvaluation();
   const [searchQuery, setSearchQuery] = useState("");
   const { employees, loading, error } = useEmployees();
+
+  const evaluators = employees.filter((e) => e.canEvaluate);
 
   if (!selectedChecklist) {
     setLocation("/");
@@ -26,7 +33,22 @@ export default function EmployeeSelection() {
     setLocation("/evaluate");
   };
 
-  const filteredEmployees = employees.filter(
+  const filteredEmployees = employees.filter((emp) => {
+    if (emp.canEvaluate) return false;
+    if (!selectedEvaluator) return false;
+
+    if (selectedEvaluator.role === "Team Leader") {
+      return emp.role === "Менеджер по привлечению партнеров";
+    }
+    if (selectedEvaluator.name === "Диер О") {
+      return emp.role === "Team Leader";
+    }
+    if (selectedEvaluator.name === "Азамат") {
+      return emp.name === "Диер О";
+    }
+
+    return false;
+  }).filter(
     (emp) =>
       emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.role.toLowerCase().includes(searchQuery.toLowerCase())
@@ -45,10 +67,32 @@ export default function EmployeeSelection() {
           <Button variant="ghost" size="icon" className="h-8 w-8 -ml-2" onClick={() => setLocation("/")}>
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <div>
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold tracking-tight">Select Employee</h1>
-            <p className="text-xs text-primary font-medium">{selectedChecklist.name}</p>
+            <p className="text-xs text-primary font-medium truncate">{selectedChecklist.name}</p>
           </div>
+        </div>
+
+        <div className="mt-3">
+          <label className="text-sm font-medium">
+            Кто проводит оценку
+          </label>
+          <select
+            className="w-full mt-2 border rounded-md p-2"
+            value={selectedEvaluator?.id || ""}
+            onChange={(e) => {
+              const evaluator = evaluators.find((x) => x.id === e.target.value);
+              if (evaluator) setSelectedEvaluator(evaluator);
+            }}
+            data-testid="select-evaluator"
+          >
+            <option value="">Выберите сотрудника</option>
+            {evaluators.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="relative">
@@ -75,7 +119,13 @@ export default function EmployeeSelection() {
           </div>
         )}
 
-        {!loading && !error && (
+        {!loading && !error && !selectedEvaluator && (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            Выберите сотрудника, который проводит оценку
+          </div>
+        )}
+
+        {!loading && !error && selectedEvaluator && (
           filteredEmployees.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No employees found
