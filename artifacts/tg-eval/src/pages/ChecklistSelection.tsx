@@ -1,5 +1,3 @@
-import { useEffect, useState } from "react";
-import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useEvaluation } from "@/context/EvaluationContext";
@@ -13,25 +11,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 export default function ChecklistSelection() {
-  const [dbChecklists, setDbChecklists] = useState<any[]>([]);
   const [, setLocation] = useLocation();
   const { setSelectedChecklist } = useEvaluation();
-  useEffect(() => {
-    if (!isSupabaseConfigured()) return;
-
-    async function loadChecklists() {
-      const { data } = await getSupabase()
-        .from("checklists")
-        .select("*")
-        .order("id");
-
-      if (data) {
-        setDbChecklists(data);
-      }
-    }
-
-    loadChecklists();
-  }, []);
 
   const handleSelect = (checklist: (typeof CHECKLISTS)[0]) => {
     setSelectedChecklist(checklist);
@@ -55,9 +36,6 @@ export default function ChecklistSelection() {
         </p>
       </header>
 
-      <div className="mb-4 text-sm">
-        Найдено чек-листов в Supabase: {dbChecklists.length}
-      </div>
       <div className="flex flex-col gap-3">
         {CHECKLISTS.map((checklist) => (
           <Card
