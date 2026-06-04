@@ -34,7 +34,6 @@ export default function EmployeeSelection() {
   };
 
   const filteredEmployees = employees.filter((emp) => {
-    if (emp.canEvaluate) return false;
     if (!selectedEvaluator) return false;
 
     if (selectedEvaluator.role === "Team Leader") {
@@ -53,6 +52,9 @@ export default function EmployeeSelection() {
       emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  console.log("SELECTED:", selectedEvaluator);
+  console.log("EMPLOYEES:", employees);
 
   return (
     <motion.div
