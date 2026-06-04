@@ -1,0 +1,111 @@
+Создай новый файл
+src/hooks/useEmployees.ts
+
+Вставь туда полностью:
+
+import { useEffect, useState } from "react";
+import { getSupabase } from "@/lib/supabase";
+
+export interface Employee {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export function useEmployees() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { data, error } = await getSupabase()
+          .from("employees")
+          .select("*")
+          .eq("active", true)
+          .order("full_name");
+
+        if (error) {
+          setError(error.message);
+          return;
+        }
+
+        setEmployees(
+          (data || []).map((e) => ({
+            id: String(e.id),
+            name: e.full_name,
+            role: e.role,
+          }))
+        );
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, []);
+
+  return { employees, loading, error };
+}
+Шаг 2. В EmployeeSelection.tsx
+
+Удали строку:
+
+import { EMPLOYEES } from "@/data/mockData";
+
+и добавь:
+
+import { useEmployees } from "@/hooks/useEmployees";
+Шаг 3.
+
+Сразу после:
+
+const [searchQuery, setSearchQuery] = useState("");
+
+добавь:
+
+const { employees, loading, error } = useEmployees();
+Шаг 4.
+
+Замени:
+
+const handleSelect = (employee: typeof EMPLOYEES[0]) => {
+
+на:
+
+const handleSelect = (employee: any) => {
+Шаг 5.
+
+Замени:
+
+const filteredEmployees = EMPLOYEES.filter(...)
+
+на:
+
+const filteredEmployees = employees.filter(
+  (emp) =>
+    emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    emp.role.toLowerCase().includes(searchQuery.toLowerCase())
+);
+Шаг 6.
+
+Перед блоком:
+
+{filteredEmployees.length === 0 ? (
+
+вставь:
+
+{loading && (
+  <div className="text-center py-8">
+    Загрузка сотрудников...
+  </div>
+)}
+
+{error && (
+  <div className="text-center py-8 text-red-500">
+    {error}
+  </div>
+)}

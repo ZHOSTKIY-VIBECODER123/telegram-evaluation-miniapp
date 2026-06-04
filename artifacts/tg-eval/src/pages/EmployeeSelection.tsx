@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { ChevronLeft, Search } from "lucide-react";
 import { useEvaluation } from "@/context/EvaluationContext";
-import { EMPLOYEES } from "@/data/mockData";
+import { useEmployees } from "@/hooks/useEmployees";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,20 +13,23 @@ export default function EmployeeSelection() {
   const [, setLocation] = useLocation();
   const { selectedChecklist, setSelectedEmployee } = useEvaluation();
   const [searchQuery, setSearchQuery] = useState("");
+  const { employees, loading, error } = useEmployees();
 
   if (!selectedChecklist) {
     setLocation("/");
     return null;
   }
 
-  const handleSelect = (employee: typeof EMPLOYEES[0]) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleSelect = (employee: any) => {
     setSelectedEmployee(employee);
     setLocation("/evaluate");
   };
 
-  const filteredEmployees = EMPLOYEES.filter((emp) => 
-    emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.role.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredEmployees = employees.filter(
+    (emp) =>
+      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -50,8 +53,8 @@ export default function EmployeeSelection() {
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search employees..." 
+          <Input
+            placeholder="Search employees..."
             className="pl-9 bg-muted/50 border-transparent focus-visible:ring-primary/50"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -60,25 +63,39 @@ export default function EmployeeSelection() {
       </header>
 
       <div className="flex-1 p-4 flex flex-col gap-2 overflow-y-auto">
-        {filteredEmployees.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No employees found
+        {loading && (
+          <div className="text-center py-8">
+            Загрузка сотрудников...
           </div>
-        ) : (
-          filteredEmployees.map((employee) => (
-            <Card 
-              key={employee.id}
-              className="p-3 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-transform hover:border-primary/50"
-              onClick={() => handleSelect(employee)}
-              data-testid={`card-employee-${employee.id}`}
-            >
-              <EmployeeAvatar name={employee.name} />
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-foreground truncate">{employee.name}</h3>
-                <p className="text-sm text-muted-foreground truncate">{employee.role}</p>
-              </div>
-            </Card>
-          ))
+        )}
+
+        {error && (
+          <div className="text-center py-8 text-red-500">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && (
+          filteredEmployees.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No employees found
+            </div>
+          ) : (
+            filteredEmployees.map((employee) => (
+              <Card
+                key={employee.id}
+                className="p-3 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-transform hover:border-primary/50"
+                onClick={() => handleSelect(employee)}
+                data-testid={`card-employee-${employee.id}`}
+              >
+                <EmployeeAvatar name={employee.name} />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-foreground truncate">{employee.name}</h3>
+                  <p className="text-sm text-muted-foreground truncate">{employee.role}</p>
+                </div>
+              </Card>
+            ))
+          )
         )}
       </div>
     </motion.div>
