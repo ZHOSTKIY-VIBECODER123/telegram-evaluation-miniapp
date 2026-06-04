@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { getSupabase } from "@/lib/supabase";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useEvaluation } from "@/context/EvaluationContext";
@@ -29,12 +30,36 @@ export default function Results() {
   const averageScore = answeredQuestions.length > 0 ? (totalScore / answeredQuestions.length).toFixed(1) : "0.0";
   const percentage = maxPossibleScore > 0 ? Math.round((totalScore / maxPossibleScore) * 100) : 0;
 
-  const handleSave = () => {
-    toast({
-      title: "Evaluation Saved",
-      description: "The results have been recorded successfully.",
-    });
-    // In a real app, we would make an API call here.
+  const handleSave = async () => {
+    try {
+      const { error } = await getSupabase()
+        .from("evaluation_results")
+        .insert({
+          checklist_name: selectedChecklist.name,
+          employee_name: selectedEmployee.name,
+          employee_role: selectedEmployee.role,
+          total_score: totalScore,
+          average_score: Number(averageScore),
+          answers: answers,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Evaluation Saved",
+        description: "The results have been saved to Supabase.",
+      });
+    } catch (err: unknown) {
+      console.error(err);
+
+      toast({
+        title: "Save Error",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleNew = () => {
