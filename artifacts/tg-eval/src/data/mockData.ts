@@ -17,44 +17,63 @@ export interface Employee {
 }
 
 export const CHECKLISTS: Checklist[] = [
-  { id: "1", name: "Customer Service", category: "Service", questions: [
-    "Greeted customers warmly",
-    "Maintained eye contact during interaction",
-    "Resolved complaints effectively",
-    "Offered additional assistance",
-    "Said farewell professionally"
-  ]},
-  { id: "2", name: "Food Safety", category: "Safety", questions: [
-    "Followed handwashing protocol",
-    "Checked temperature logs",
-    "Labeled all food containers properly",
-    "Maintained clean workspace",
-    "Stored ingredients at correct temperatures",
-    "Followed allergen procedures"
-  ]},
-  { id: "3", name: "Opening Procedure", category: "Operations", questions: [
-    "Arrived on time",
-    "Completed cleaning checklist",
-    "Checked inventory levels",
-    "Set up POS system correctly",
-    "Briefed team on daily specials",
-    "Tested all equipment",
-    "Unlocked premises at correct time"
-  ]},
-  { id: "4", name: "Closing Procedure", category: "Operations", questions: [
-    "Completed end-of-day reconciliation",
-    "Cleaned and sanitized all surfaces",
-    "Secured cash properly",
-    "Locked all access points",
-    "Submitted daily report"
-  ]}
+  {
+    id: "1",
+    name: "Полевое сопровождение менеджера",
+    category: "Field",
+    questions: [
+      "Изучил ли сотрудник информацию о селлере заранее",
+      "Понимает ли нишу / товар селлера",
+      "Подготовил ли аргументы/примеры под конкретного селлера",
+    ],
+  },
+  {
+    id: "2",
+    name: "Оценка Team Leader",
+    category: "Management",
+    questions: [
+      "Подготовился к Weekly",
+      "Провел разбор KPI сотрудников",
+      "Дал конструктивную обратную связь",
+      "Согласовал план действий",
+      "Вел протокол встречи",
+    ],
+  },
+  {
+    id: "3",
+    name: "Оценка Team Leader V2",
+    category: "Management",
+    questions: [
+      "Подготовка к встрече",
+      "Управление встречей",
+      "Анализ результатов команды",
+      "Обратная связь",
+      "Постановка задач",
+      "Работа с командой",
+      "Протокол встречи",
+    ],
+  },
 ];
 
 export const EMPLOYEES: Employee[] = [
-  { id: "1", name: "Alex Johnson", role: "Shift Manager" },
-  { id: "2", name: "Maria Santos", role: "Barista" },
-  { id: "3", name: "David Kim", role: "Cashier" },
-  { id: "4", name: "Sophie Chen", role: "Barista" },
-  { id: "5", name: "James Williams", role: "Kitchen Staff" },
-  { id: "6", name: "Emma Davis", role: "Floor Staff" }
+  {
+    id: "1",
+    name: "Менеджер по привлечению партнеров",
+    role: "Менеджер",
+  },
+  {
+    id: "2",
+    name: "Team Leader",
+    role: "Team Leader",
+  },
+  {
+    id: "3",
+    name: "Диер О",
+    role: "Руководитель отдела",
+  },
+  {
+    id: "4",
+    name: "Азамат",
+    role: "Бизнес Поддержка",
+  },
 ];
