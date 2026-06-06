@@ -11,7 +11,13 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Results() {
   const [, setLocation] = useLocation();
-  const { selectedChecklist, selectedEmployee, answers, reset } = useEvaluation();
+  const {
+    selectedChecklist,
+    selectedEmployee,
+    selectedEvaluator,
+    answers,
+    reset,
+  } = useEvaluation();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -38,6 +44,7 @@ export default function Results() {
           checklist_name: selectedChecklist.name,
           employee_name: selectedEmployee.name,
           employee_role: selectedEmployee.role,
+          evaluator_name: selectedEvaluator?.name,
           total_score: totalScore,
           average_score: Number(averageScore),
           answers: answers,

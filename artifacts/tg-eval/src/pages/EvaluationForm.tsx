@@ -10,13 +10,13 @@ import { ProgressBar } from "@/components/ProgressBar";
 
 export default function EvaluationForm() {
   const [, setLocation] = useLocation();
-  const { 
-    selectedChecklist, 
-    selectedEmployee, 
-    currentQuestionIndex, 
+  const {
+    selectedChecklist,
+    selectedEmployee,
+    currentQuestionIndex,
     setCurrentQuestionIndex,
     answers,
-    setAnswer
+    setAnswer,
   } = useEvaluation();
 
   const [direction, setDirection] = useState(1);
@@ -31,7 +31,10 @@ export default function EvaluationForm() {
 
   const totalQuestions = selectedChecklist.questions.length;
   const currentQuestion = selectedChecklist.questions[currentQuestionIndex];
-  const currentAnswer = answers[currentQuestionIndex] || { score: null, comment: "" };
+  const currentAnswer = answers[currentQuestionIndex] || {
+    score: null,
+    comment: "",
+  };
 
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
 
@@ -57,16 +60,28 @@ export default function EvaluationForm() {
     <div className="max-w-[430px] mx-auto min-h-[100dvh] bg-background flex flex-col overflow-hidden relative">
       <header className="bg-primary text-primary-foreground p-4 sticky top-0 z-20 shadow-md">
         <div className="flex items-center gap-3 mb-4">
-          <Button variant="ghost" size="icon" className="h-8 w-8 -ml-2 text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground" onClick={handlePrev}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 -ml-2 text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground"
+            onClick={handlePrev}
+          >
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold truncate">{selectedChecklist.name}</h1>
-            <p className="text-sm opacity-90 truncate">{selectedEmployee.name} • {selectedEmployee.role}</p>
+            <h1 className="text-lg font-bold truncate">
+              {selectedChecklist.name}
+            </h1>
+            <p className="text-sm opacity-90 truncate">
+              {selectedEmployee.name} • {selectedEmployee.role}
+            </p>
           </div>
         </div>
         <div className="bg-primary-foreground/20 rounded-full p-1 pb-3">
-          <ProgressBar current={currentQuestionIndex + 1} total={totalQuestions} />
+          <ProgressBar
+            current={currentQuestionIndex + 1}
+            total={totalQuestions}
+          />
         </div>
       </header>
 
@@ -93,19 +108,28 @@ export default function EvaluationForm() {
                   key={score}
                   score={score}
                   selected={currentAnswer.score === score}
-                  onClick={() => setAnswer(currentQuestionIndex, { ...currentAnswer, score })}
+                  onClick={() =>
+                    setAnswer(currentQuestionIndex, { ...currentAnswer, score })
+                  }
                   data-testid={`button-score-${score}`}
                 />
               ))}
             </div>
 
             <div className="space-y-2 mt-4">
-              <label className="text-sm font-medium text-muted-foreground">Comments (optional)</label>
-              <Textarea 
+              <label className="text-sm font-medium text-muted-foreground">
+                Comments (optional)
+              </label>
+              <Textarea
                 placeholder="Add a comment..."
                 className="min-h-[120px] resize-none bg-muted/30 focus-visible:ring-primary/50"
                 value={currentAnswer.comment}
-                onChange={(e) => setAnswer(currentQuestionIndex, { ...currentAnswer, comment: e.target.value })}
+                onChange={(e) =>
+                  setAnswer(currentQuestionIndex, {
+                    ...currentAnswer,
+                    comment: e.target.value,
+                  })
+                }
               />
             </div>
           </motion.div>
@@ -113,16 +137,20 @@ export default function EvaluationForm() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto p-4 bg-background/80 backdrop-blur-md border-t z-20">
-        <Button 
+        <Button
           className="w-full h-12 text-lg font-semibold rounded-xl"
           disabled={currentAnswer.score === null}
           onClick={handleNext}
           data-testid={isLastQuestion ? "button-finish" : "button-next"}
         >
           {isLastQuestion ? (
-            <>Finish Evaluation <Check className="ml-2 h-5 w-5" /></>
+            <>
+              Finish Evaluation <Check className="ml-2 h-5 w-5" />
+            </>
           ) : (
-            <>Next Question <ChevronRight className="ml-2 h-5 w-5" /></>
+            <>
+              Next Question <ChevronRight className="ml-2 h-5 w-5" />
+            </>
           )}
         </Button>
       </div>
