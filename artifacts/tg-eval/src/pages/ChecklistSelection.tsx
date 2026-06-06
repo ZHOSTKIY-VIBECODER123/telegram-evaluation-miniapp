@@ -48,6 +48,14 @@ export default function ChecklistSelection() {
         История оценок
       </Button>
 
+      <Button
+        variant="outline"
+        className="w-full mb-4"
+        onClick={() => setLocation("/dashboard")}
+      >
+        Аналитика сотрудников
+      </Button>
+
       {loading && (
         <div className="flex-1 flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
