@@ -68,7 +68,15 @@ export default function Dashboard() {
       </h1>
 
       {stats.map((item) => (
-        <Card key={item.employee}>
+      <Card
+        key={item.employee}
+        className="cursor-pointer hover:border-primary transition-colors"
+        onClick={() =>
+          setLocation(
+            `/dashboard/${encodeURIComponent(item.employee)}`
+          )
+        }
+      >
           <CardContent className="p-4">
             <div className="font-bold text-lg">
               {item.employee}
