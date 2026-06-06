@@ -10,6 +10,7 @@ import EmployeeSelection from "@/pages/EmployeeSelection";
 import EvaluationForm from "@/pages/EvaluationForm";
 import Results from "@/pages/Results";
 import History from "@/pages/History";
+import EvaluationDetails from "@/pages/EvaluationDetails";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -23,6 +24,7 @@ function Router() {
         <Route path="/evaluate" component={EvaluationForm} />
         <Route path="/results" component={Results} />
         <Route path="/history" component={History} />
+        <Route path="/history/:id" component={EvaluationDetails} />
         <Route component={NotFound} />
       </Switch>
     </AnimatePresence>
