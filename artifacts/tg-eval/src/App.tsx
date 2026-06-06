@@ -12,6 +12,7 @@ import Results from "@/pages/Results";
 import History from "@/pages/History";
 import EvaluationDetails from "@/pages/EvaluationDetails";
 import Dashboard from "@/pages/Dashboard";
+import EmployeeAnalytics from "@/pages/EmployeeAnalytics";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ function Router() {
         <Route path="/history" component={History} />
         <Route path="/history/:id" component={EvaluationDetails} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/dashboard/:employee" component={EmployeeAnalytics} />
         <Route component={NotFound} />
       </Switch>
     </AnimatePresence>
