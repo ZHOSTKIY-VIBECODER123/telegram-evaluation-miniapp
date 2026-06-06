@@ -11,6 +11,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function ChecklistSelection() {
   const [, setLocation] = useLocation();
@@ -38,6 +39,14 @@ export default function ChecklistSelection() {
           Choose a template to begin evaluation
         </p>
       </header>
+
+      <Button
+        variant="outline"
+        className="w-full mb-4"
+        onClick={() => setLocation("/history")}
+      >
+        История оценок
+      </Button>
 
       {loading && (
         <div className="flex-1 flex items-center justify-center py-16">
