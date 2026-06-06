@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { getSupabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function History() {
+  const [, setLocation] = useLocation();
   const [evaluations, setEvaluations] = useState<any[]>([]);
 
   useEffect(() => {
@@ -22,12 +24,14 @@ export default function History() {
 
   return (
     <div className="max-w-[430px] mx-auto p-4 space-y-4">
-      <h1 className="text-2xl font-bold">
-        История оценок
-      </h1>
+      <h1 className="text-2xl font-bold">История оценок</h1>
 
       {evaluations.map((item) => (
-        <Card key={item.id}>
+        <Card
+          key={item.id}
+          className="cursor-pointer hover:border-primary"
+          onClick={() => setLocation(`/history/${item.id}`)}
+        >
           <CardContent className="p-4">
             <div className="font-semibold">
               {item.evaluator_name} → {item.employee_name}
@@ -37,9 +41,7 @@ export default function History() {
               {item.checklist_name}
             </div>
 
-            <div className="mt-2">
-              Средний балл: {item.average_score}
-            </div>
+            <div className="mt-2">Средний балл: {item.average_score}</div>
 
             <div className="text-xs text-muted-foreground mt-1">
               {new Date(item.created_at).toLocaleString()}
