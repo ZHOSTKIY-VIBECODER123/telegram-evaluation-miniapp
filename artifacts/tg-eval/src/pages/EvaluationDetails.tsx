@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { getSupabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft } from "lucide-react";
 
 export default function EvaluationDetails() {
   const [, params] = useRoute("/history/:id");
+  const [, setLocation] = useLocation();
 
   const [evaluation, setEvaluation] = useState<any>(null);
 
@@ -38,6 +41,14 @@ export default function EvaluationDetails() {
 
   return (
     <div className="max-w-[430px] mx-auto p-4 space-y-4">
+      <Button
+        variant="ghost"
+        className="mb-2 -ml-2"
+        onClick={() => setLocation("/history")}
+      >
+        <ChevronLeft className="h-4 w-4 mr-1" />
+        Назад
+      </Button>
       <h1 className="text-2xl font-bold">
         Детали оценки
       </h1>

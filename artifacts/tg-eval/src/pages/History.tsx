@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { getSupabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft } from "lucide-react";
 
 export default function History() {
   const [, setLocation] = useLocation();
@@ -24,6 +26,14 @@ export default function History() {
 
   return (
     <div className="max-w-[430px] mx-auto p-4 space-y-4">
+      <Button
+        variant="ghost"
+        className="mb-2 -ml-2"
+        onClick={() => setLocation("/")}
+      >
+        <ChevronLeft className="h-4 w-4 mr-1" />
+        Назад
+      </Button>
       <h1 className="text-2xl font-bold">История оценок</h1>
 
       {evaluations.map((item) => (
