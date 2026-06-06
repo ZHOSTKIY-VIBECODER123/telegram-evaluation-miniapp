@@ -9,6 +9,7 @@ import ChecklistSelection from "@/pages/ChecklistSelection";
 import EmployeeSelection from "@/pages/EmployeeSelection";
 import EvaluationForm from "@/pages/EvaluationForm";
 import Results from "@/pages/Results";
+import History from "@/pages/History";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -21,6 +22,7 @@ function Router() {
         <Route path="/employees" component={EmployeeSelection} />
         <Route path="/evaluate" component={EvaluationForm} />
         <Route path="/results" component={Results} />
+        <Route path="/history" component={History} />
         <Route component={NotFound} />
       </Switch>
     </AnimatePresence>

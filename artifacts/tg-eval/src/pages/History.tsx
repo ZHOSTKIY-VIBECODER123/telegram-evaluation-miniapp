@@ -1,0 +1,52 @@
+import { useEffect, useState } from "react";
+import { getSupabase } from "@/lib/supabase";
+import { Card, CardContent } from "@/components/ui/card";
+
+export default function History() {
+  const [evaluations, setEvaluations] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadData() {
+      const { data, error } = await getSupabase()
+        .from("evaluation_results")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error) {
+        setEvaluations(data || []);
+      }
+    }
+
+    loadData();
+  }, []);
+
+  return (
+    <div className="max-w-[430px] mx-auto p-4 space-y-4">
+      <h1 className="text-2xl font-bold">
+        История оценок
+      </h1>
+
+      {evaluations.map((item) => (
+        <Card key={item.id}>
+          <CardContent className="p-4">
+            <div className="font-semibold">
+              {item.evaluator_name} → {item.employee_name}
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              {item.checklist_name}
+            </div>
+
+            <div className="mt-2">
+              Средний балл: {item.average_score}
+            </div>
+
+            <div className="text-xs text-muted-foreground mt-1">
+              {new Date(item.created_at).toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
