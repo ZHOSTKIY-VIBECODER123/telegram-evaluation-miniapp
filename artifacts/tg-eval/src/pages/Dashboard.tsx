@@ -83,6 +83,8 @@ export default function Dashboard() {
             Вопросы
           </button>
         </div>
+
+        <div>{tab}</div>
       </header>
 
       {stats.length === 0 && (
@@ -91,25 +93,28 @@ export default function Dashboard() {
         </div>
       )}
 
-      {stats.map((item) => (
-        <Card
-          key={item.employee}
-          className="cursor-pointer active:scale-[0.98] transition-transform hover:border-primary/50"
-          onClick={() =>
-            setLocation(`/dashboard/${encodeURIComponent(item.employee)}`)
-          }
-        >
-          <CardContent className="p-4">
-            <div className="font-bold text-lg">{item.employee}</div>
+      {tab === "employees" &&
+        stats.map((item) => (
+          <Card
+            key={item.employee}
+            className="cursor-pointer active:scale-[0.98] transition-transform hover:border-primary/50"
+            onClick={() =>
+              setLocation(`/dashboard/${encodeURIComponent(item.employee)}`)
+            }
+          >
+            <CardContent className="p-4">
+              <div className="font-bold text-lg">{item.employee}</div>
 
-            <div className="mt-2 font-medium">Средний балл: {item.average}</div>
+              <div className="mt-2 font-medium">
+                Средний балл: {item.average}
+              </div>
 
-            <div className="text-muted-foreground text-sm">
-              Оценок: {item.evaluations}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+              <div className="text-muted-foreground text-sm">
+                Оценок: {item.evaluations}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
     </div>
   );
 }
