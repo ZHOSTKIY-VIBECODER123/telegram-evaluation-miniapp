@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [stats, setStats] = useState<any[]>([]);
+  const [tab, setTab] = useState("employees");
 
   useEffect(() => {
     async function loadData() {
@@ -27,8 +28,9 @@ export default function Dashboard() {
         }
 
         grouped[item.employee_name].evaluations += 1;
-        grouped[item.employee_name].totalAverage +=
-          Number(item.average_score || 0);
+        grouped[item.employee_name].totalAverage += Number(
+          item.average_score || 0,
+        );
       });
 
       const result = Object.values(grouped).map((item: any) => ({
@@ -40,9 +42,7 @@ export default function Dashboard() {
             : "0",
       }));
 
-      result.sort(
-        (a: any, b: any) => Number(b.average) - Number(a.average),
-      );
+      result.sort((a: any, b: any) => Number(b.average) - Number(a.average));
 
       setStats(result);
     }
@@ -59,6 +59,30 @@ export default function Dashboard() {
         <p className="text-muted-foreground text-sm mt-1">
           Средние баллы по сотрудникам
         </p>
+
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={() => setTab("employees")}
+            className={`px-3 py-2 rounded-lg text-sm ${
+              tab === "employees"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted"
+            }`}
+          >
+            Сотрудники
+          </button>
+
+          <button
+            onClick={() => setTab("questions")}
+            className={`px-3 py-2 rounded-lg text-sm ${
+              tab === "questions"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted"
+            }`}
+          >
+            Вопросы
+          </button>
+        </div>
       </header>
 
       {stats.length === 0 && (
@@ -78,9 +102,7 @@ export default function Dashboard() {
           <CardContent className="p-4">
             <div className="font-bold text-lg">{item.employee}</div>
 
-            <div className="mt-2 font-medium">
-              Средний балл: {item.average}
-            </div>
+            <div className="mt-2 font-medium">Средний балл: {item.average}</div>
 
             <div className="text-muted-foreground text-sm">
               Оценок: {item.evaluations}
