@@ -70,20 +70,23 @@ export default function Results() {
       }
 
       try {
-        const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || "";
-        await fetch(`${apiBase}/api/sheets-sync`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            created_at: new Date().toISOString(),
-            evaluator_name: selectedEvaluator?.name || "",
-            employee_name: selectedEmployee.name,
-            checklist_name: selectedChecklist.name,
-            total_score: totalScore,
-            average_score: Number(averageScore),
-            answers,
-          }),
-        });
+        await fetch(
+          "https://script.google.com/macros/s/AKfycbzCEPf-2tm_p7rz6hkGvaFa93OQX26uVDvYKVexkvrFzFewLqM06jcu3iodme5VQff72g/exec",
+          {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({
+              created_at: new Date().toISOString(),
+              evaluator_name: selectedEvaluator?.name || "",
+              employee_name: selectedEmployee.name,
+              checklist_name: selectedChecklist.name,
+              total_score: totalScore,
+              average_score: Number(averageScore),
+              answers,
+            }),
+          }
+        );
       } catch (sheetError) {
         console.error("Google Sheets sync error:", sheetError);
       }
