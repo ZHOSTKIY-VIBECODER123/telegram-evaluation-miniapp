@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { useLocation } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useEvaluation } from "@/context/EvaluationContext";
 import { useToast } from "@/hooks/use-toast";
-import { Check, RotateCcw } from "lucide-react";
+import { Check, RotateCcw, Loader2 } from "lucide-react";
 
 const SCORE_COLORS = ["#FF3B30", "#FF9500", "#FFD60A", "#34C759"] as const;
 
@@ -12,6 +12,8 @@ export default function Results() {
   const [, setLocation] = useLocation();
   const { selectedChecklist, selectedEmployee, selectedEvaluator, answers, reset } = useEvaluation();
   const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!selectedChecklist || !selectedEmployee) setLocation("/");
@@ -30,6 +32,8 @@ export default function Results() {
   const accentColor = avg >= 2.5 ? "#34C759" : avg >= 1.5 ? "#FF9500" : "#FF3B30";
 
   const handleSave = async () => {
+    if (saving || saved) return;
+    setSaving(true);
     try {
       const { error } = await getSupabase()
         .from("evaluation_results")
@@ -49,31 +53,31 @@ export default function Results() {
 
       if (error) throw error;
 
-      try {
-        await fetch(
-          "https://script.google.com/macros/s/AKfycbzCEPf-2tm_p7rz6hkGvaFa93OQX26uVDvYKVexkvrFzFewLqM06jcu3iodme5VQff72g/exec",
-          {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({
-              created_at: new Date().toISOString(),
-              evaluator_name: selectedEvaluator?.name || "",
-              employee_name: selectedEmployee.name,
-              checklist_name: selectedChecklist.name,
-              total_score: totalScore,
-              average_score: Number(averageScore),
-              answers,
-            }),
-          }
-        );
-      } catch (sheetError) {
-        console.error("Google Sheets sync error:", sheetError);
-      }
+      // Google Sheets — fire-and-forget, ошибки не блокируют
+      fetch(
+        "https://script.google.com/macros/s/AKfycbzCEPf-2tm_p7rz6hkGvaFa93OQX26uVDvYKVexkvrFzFewLqM06jcu3iodme5VQff72g/exec",
+        {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            created_at: new Date().toISOString(),
+            evaluator_name: selectedEvaluator?.name || "",
+            employee_name: selectedEmployee.name,
+            checklist_name: selectedChecklist.name,
+            total_score: totalScore,
+            average_score: Number(averageScore),
+            answers,
+          }),
+        }
+      ).catch((e) => console.error("Sheets sync:", e));
 
+      setSaved(true);
       toast({ title: "Сохранено ✓", description: "Оценка записана в базу данных." });
     } catch (err: unknown) {
       toast({ title: "Ошибка", description: err instanceof Error ? err.message : "Неизвестная ошибка", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -159,12 +163,55 @@ export default function Results() {
 
         {/* Actions */}
         <motion.button
-          whileTap={{ scale: 0.97 }}
+          whileTap={!saving && !saved ? { scale: 0.97 } : {}}
           onClick={handleSave}
-          className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
-          style={{ background: "#007AFF", color: "#fff", boxShadow: "0 4px 16px rgba(0,122,255,0.35)" }}
+          disabled={saving || saved}
+          className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2 overflow-hidden relative"
+          style={{
+            background: saved ? "#34C759" : "#007AFF",
+            color: "#fff",
+            boxShadow: saved
+              ? "0 4px 16px rgba(52,199,89,0.4)"
+              : "0 4px 16px rgba(0,122,255,0.35)",
+            opacity: saving ? 0.85 : 1,
+            transition: "background 0.3s, box-shadow 0.3s",
+          }}
         >
-          <Check className="h-5 w-5" /> Сохранить оценку
+          <AnimatePresence mode="wait" initial={false}>
+            {saving && (
+              <motion.span
+                key="loading"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="flex items-center gap-2"
+              >
+                <Loader2 className="h-5 w-5 animate-spin" /> Сохранение...
+              </motion.span>
+            )}
+            {!saving && saved && (
+              <motion.span
+                key="saved"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center gap-2"
+              >
+                <Check className="h-5 w-5" /> Сохранено
+              </motion.span>
+            )}
+            {!saving && !saved && (
+              <motion.span
+                key="idle"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="flex items-center gap-2"
+              >
+                <Check className="h-5 w-5" /> Сохранить оценку
+              </motion.span>
+            )}
+          </AnimatePresence>
         </motion.button>
 
         <motion.button

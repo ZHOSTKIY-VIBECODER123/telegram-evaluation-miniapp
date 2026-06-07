@@ -21,7 +21,7 @@ const queryClient = new QueryClient();
 
 function Router() {
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence initial={false}>
       <Switch>
         <Route path="/" component={ChecklistSelection} />
         <Route path="/employees" component={EmployeeSelection} />

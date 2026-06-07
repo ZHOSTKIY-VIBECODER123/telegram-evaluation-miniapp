@@ -312,7 +312,8 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
   const [expanded, setExpanded] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
   const [showAddChecklist, setShowAddChecklist] = useState(false);
-  const [addingQuestion, setAddingQuestion] = useState<{ sectionId: number } | null>(null);
+  // Вопрос добавляется через IosSheet, а не inline (клавиатура на мобиле обрезала overflow:hidden)
+  const [addQuestionSheet, setAddQuestionSheet] = useState<{ sectionId: number; sectionTitle: string } | null>(null);
   const [newQuestion, setNewQuestion] = useState("");
 
   const load = async () => {
@@ -339,17 +340,17 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
   };
 
   const addQuestion = async () => {
-    if (!addingQuestion || !newQuestion.trim()) return;
-    const section = checklists.flatMap((c) => c.checklist_sections).find((s) => s.id === addingQuestion.sectionId);
+    if (!addQuestionSheet || !newQuestion.trim()) return;
+    const section = checklists.flatMap((c) => c.checklist_sections).find((s) => s.id === addQuestionSheet.sectionId);
     const maxOrder = section ? Math.max(0, ...section.checklist_questions.map((q) => q.sort_order)) : 0;
     const { error } = await getSupabase().from("checklist_questions").insert({
-      section_id: addingQuestion.sectionId,
+      section_id: addQuestionSheet.sectionId,
       question_text: newQuestion.trim(),
       sort_order: maxOrder + 1,
     });
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     setNewQuestion("");
-    setAddingQuestion(null);
+    setAddQuestionSheet(null);
     toast({ title: "Вопрос добавлен ✓" });
     load();
   };
@@ -420,14 +421,14 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
                       {sec.checklist_questions.sort((a, b) => a.sort_order - b.sort_order).map((q, qi) => (
                         <div
                           key={q.id}
-                          className="flex items-center gap-2 py-2.5"
+                          className="flex items-start gap-2 py-2.5"
                           style={{ borderTop: qi > 0 ? "0.5px solid rgba(60,60,67,0.08)" : "none" }}
                         >
-                          <ChevronRight className="h-3 w-3 flex-shrink-0" style={{ color: "rgba(60,60,67,0.25)" }} />
+                          <ChevronRight className="h-3 w-3 flex-shrink-0 mt-1" style={{ color: "rgba(60,60,67,0.25)" }} />
                           <span className="flex-1 text-[14px] leading-snug" style={{ color: "#000" }}>{q.question_text}</span>
                           <button
                             onClick={() => deleteQuestion(q.id)}
-                            className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 active:opacity-60"
+                            className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 active:opacity-60 mt-0.5"
                             style={{ background: "rgba(255,59,48,0.1)" }}
                           >
                             <X className="h-3 w-3" style={{ color: "#FF3B30" }} />
@@ -436,41 +437,14 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
                       ))}
                     </div>
 
-                    {addingQuestion?.sectionId === sec.id ? (
-                      <div className="mt-2 flex gap-2">
-                        <input
-                          className="flex-1 px-3 py-2 rounded-[12px] text-[14px] outline-none"
-                          style={{ background: "rgba(118,118,128,0.1)", color: "#000" }}
-                          placeholder="Текст вопроса..."
-                          value={newQuestion}
-                          onChange={(e) => setNewQuestion(e.target.value)}
-                          autoFocus
-                          onKeyDown={(e) => { if (e.key === "Enter") addQuestion(); if (e.key === "Escape") setAddingQuestion(null); }}
-                        />
-                        <button
-                          onClick={addQuestion}
-                          className="px-3 py-2 rounded-[12px] text-[14px] font-medium"
-                          style={{ background: "#007AFF", color: "#fff" }}
-                        >
-                          OK
-                        </button>
-                        <button
-                          onClick={() => setAddingQuestion(null)}
-                          className="px-3 py-2 rounded-[12px] text-[14px] font-medium"
-                          style={{ background: "rgba(60,60,67,0.1)", color: "rgba(60,60,67,0.6)" }}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => { setAddingQuestion({ sectionId: sec.id }); setNewQuestion(""); }}
-                        className="mt-2 flex items-center gap-1.5 text-[14px] active:opacity-60"
-                        style={{ color: "#007AFF" }}
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Добавить вопрос
-                      </button>
-                    )}
+                    {/* Кнопка открывает IosSheet вместо inline-input */}
+                    <button
+                      onClick={() => { setAddQuestionSheet({ sectionId: sec.id, sectionTitle: sec.title }); setNewQuestion(""); }}
+                      className="mt-3 flex items-center gap-1.5 text-[14px] active:opacity-60"
+                      style={{ color: "#007AFF" }}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Добавить вопрос
+                    </button>
                   </div>
                 ))}
               </motion.div>
@@ -479,7 +453,37 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
         </div>
       ))}
 
-      {/* Add checklist sheet */}
+      {/* Sheet: добавить вопрос */}
+      <AnimatePresence>
+        {addQuestionSheet && (
+          <IosSheet
+            title={`Вопрос · ${addQuestionSheet.sectionTitle}`}
+            onClose={() => setAddQuestionSheet(null)}
+          >
+            <textarea
+              className="w-full px-4 py-3.5 text-[16px] rounded-[16px] outline-none resize-none"
+              style={{ background: "rgba(118,118,128,0.08)", color: "#000", minHeight: 100 }}
+              placeholder="Текст вопроса..."
+              value={newQuestion}
+              onChange={(e) => setNewQuestion(e.target.value)}
+              autoFocus
+            />
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={addQuestion}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold mt-3 flex items-center justify-center gap-2"
+              style={{
+                background: newQuestion.trim() ? "#007AFF" : "rgba(0,122,255,0.3)",
+                color: "#fff",
+              }}
+            >
+              <Check className="h-5 w-5" /> Добавить
+            </motion.button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Sheet: новый чек-лист */}
       <AnimatePresence>
         {showAddChecklist && (
           <IosSheet title="Новый чек-лист" onClose={() => setShowAddChecklist(false)}>
@@ -569,22 +573,22 @@ function RolesTab() {
 function IosSheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — выше навигации (z-50) */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-40"
-        style={{ background: "rgba(0,0,0,0.4)" }}
+        className="fixed inset-0 z-[59]"
+        style={{ background: "rgba(0,0,0,0.45)" }}
         onClick={onClose}
       />
-      {/* Sheet */}
+      {/* Sheet — выше backdrop и навигации */}
       <motion.div
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="fixed bottom-0 left-0 right-0 z-50 max-w-[430px] mx-auto rounded-t-[24px] px-4 pt-5 pb-10"
+        className="fixed bottom-0 left-0 right-0 z-[60] max-w-[430px] mx-auto rounded-t-[24px] px-4 pt-5 pb-12"
         style={{ background: "#F2F2F7" }}
       >
         {/* Drag handle */}
