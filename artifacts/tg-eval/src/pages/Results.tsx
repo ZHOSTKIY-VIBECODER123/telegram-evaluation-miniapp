@@ -58,7 +58,11 @@ export default function Results() {
           evaluator_name: selectedEvaluator?.name || "",
           total_score: totalScore,
           average_score: Number(averageScore),
-          answers: answers,
+          answers: selectedChecklist.questions.map((question, index) => ({
+            question,
+            score: answers[index]?.score ?? null,
+            comment: answers[index]?.comment ?? "",
+          })),
         });
 
       if (error) {
