@@ -11,7 +11,6 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 export default function ChecklistSelection() {
   const [, setLocation] = useLocation();
@@ -33,28 +32,12 @@ export default function ChecklistSelection() {
     >
       <header className="py-4">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">
-          Select Checklist
+          Оценка сотрудников
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Choose a template to begin evaluation
+          Выберите чек-лист для начала оценки
         </p>
       </header>
-
-      <Button
-        variant="outline"
-        className="w-full mb-4"
-        onClick={() => setLocation("/history")}
-      >
-        История оценок
-      </Button>
-
-      <Button
-        variant="outline"
-        className="w-full mb-4"
-        onClick={() => setLocation("/dashboard")}
-      >
-        Аналитика сотрудников
-      </Button>
 
       {loading && (
         <div className="flex-1 flex items-center justify-center py-16">
@@ -66,7 +49,7 @@ export default function ChecklistSelection() {
         <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive text-sm">
           <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold">Failed to load checklists</p>
+            <p className="font-semibold">Ошибка загрузки чек-листов</p>
             <p className="mt-0.5 opacity-80">{error}</p>
           </div>
         </div>
@@ -74,7 +57,7 @@ export default function ChecklistSelection() {
 
       {!loading && !error && checklists.length === 0 && (
         <div className="flex-1 flex items-center justify-center py-16 text-muted-foreground text-sm">
-          No checklists found.
+          Чек-листы не найдены.
         </div>
       )}
 
@@ -92,7 +75,7 @@ export default function ChecklistSelection() {
                   <div>
                     <CardTitle className="text-lg">{checklist.name}</CardTitle>
                     <CardDescription className="mt-1">
-                      {checklist.questions.length} questions
+                      {checklist.questions.length} вопросов
                     </CardDescription>
                   </div>
                   <Badge

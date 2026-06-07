@@ -4,6 +4,7 @@ import { AnimatePresence } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { EvaluationProvider } from "@/context/EvaluationContext";
+import { AppLayout } from "@/components/AppLayout";
 
 import ChecklistSelection from "@/pages/ChecklistSelection";
 import EmployeeSelection from "@/pages/EmployeeSelection";
@@ -13,6 +14,7 @@ import History from "@/pages/History";
 import EvaluationDetails from "@/pages/EvaluationDetails";
 import Dashboard from "@/pages/Dashboard";
 import EmployeeAnalytics from "@/pages/EmployeeAnalytics";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -29,6 +31,7 @@ function Router() {
         <Route path="/history/:id" component={EvaluationDetails} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/dashboard/:employee" component={EmployeeAnalytics} />
+        <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>
     </AnimatePresence>
@@ -41,9 +44,9 @@ function App() {
       <EvaluationProvider>
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <div className="min-h-[100dvh] bg-muted/20">
+            <AppLayout>
               <Router />
-            </div>
+            </AppLayout>
           </WouterRouter>
           <Toaster />
         </TooltipProvider>
