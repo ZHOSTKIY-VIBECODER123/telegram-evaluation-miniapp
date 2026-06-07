@@ -7,40 +7,41 @@ interface ScoreButtonProps {
   "data-testid"?: string;
 }
 
+const SCORE_CONFIG = {
+  0: { bg: "#FF3B30", label: "0", desc: "Нет" },
+  1: { bg: "#FF9500", label: "1", desc: "Частично" },
+  2: { bg: "#FFD60A", label: "2", desc: "Хорошо" },
+  3: { bg: "#34C759", label: "3", desc: "Отлично" },
+} as const;
+
 export function ScoreButton({ score, selected, onClick, "data-testid": testId }: ScoreButtonProps) {
-  const colors = {
-    0: "bg-[#EF4444] text-white border-[#EF4444]",
-    1: "bg-[#F97316] text-white border-[#F97316]",
-    2: "bg-[#EAB308] text-white border-[#EAB308]",
-    3: "bg-[#22C55E] text-white border-[#22C55E]",
-  };
-
-  const selectedColors = {
-    0: "ring-2 ring-offset-2 ring-[#EF4444]",
-    1: "ring-2 ring-offset-2 ring-[#F97316]",
-    2: "ring-2 ring-offset-2 ring-[#EAB308]",
-    3: "ring-2 ring-offset-2 ring-[#22C55E]",
-  };
-
-  const defaultColors = {
-    0: "text-[#EF4444] border-[#EF4444] bg-white",
-    1: "text-[#F97316] border-[#F97316] bg-white",
-    2: "text-[#EAB308] border-[#EAB308] bg-white",
-    3: "text-[#22C55E] border-[#22C55E] bg-white",
-  };
+  const config = SCORE_CONFIG[score as keyof typeof SCORE_CONFIG];
 
   return (
     <button
       data-testid={testId}
       onClick={onClick}
-      className={cn(
-        "flex items-center justify-center min-h-[44px] w-full rounded-xl border-2 font-bold text-lg transition-all",
-        selected
-          ? cn(colors[score as keyof typeof colors], selectedColors[score as keyof typeof selectedColors])
-          : defaultColors[score as keyof typeof defaultColors]
-      )}
+      className="flex flex-col items-center justify-center gap-1 h-[72px] w-full rounded-[18px] transition-all duration-150 active:scale-95"
+      style={{
+        background: selected ? config.bg : `${config.bg}18`,
+        boxShadow: selected
+          ? `0 4px 16px ${config.bg}50`
+          : "none",
+        transform: selected ? "scale(1.04)" : "scale(1)",
+      }}
     >
-      {score}
+      <span
+        className="text-[22px] font-bold"
+        style={{ color: selected ? "#fff" : config.bg }}
+      >
+        {config.label}
+      </span>
+      <span
+        className="text-[10px] font-medium"
+        style={{ color: selected ? "rgba(255,255,255,0.85)" : config.bg }}
+      >
+        {config.desc}
+      </span>
     </button>
   );
 }

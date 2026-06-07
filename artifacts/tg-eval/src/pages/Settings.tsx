@@ -1,18 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, X, Check } from "lucide-react";
 
 type Employee = {
   id: number;
@@ -26,41 +16,53 @@ type Question = { id: number; question_text: string; sort_order: number };
 type Section = { id: number; title: string; sort_order: number; checklist_questions: Question[] };
 type Checklist = { id: number; name: string; checklist_sections: Section[] };
 
-const TABS = ["Сотрудники", "Чек-листы", "Роли"] as const;
-type Tab = (typeof TABS)[number];
+const TABS = [
+  { key: "employees", label: "Сотрудники" },
+  { key: "checklists", label: "Чек-листы" },
+  { key: "roles", label: "Роли" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
 
 export default function Settings() {
-  const [tab, setTab] = useState<Tab>("Сотрудники");
+  const [tab, setTab] = useState<TabKey>("employees");
   const { toast } = useToast();
 
   return (
-    <div className="max-w-[430px] mx-auto p-4 space-y-4">
-      <header className="py-4">
-        <h1 className="text-2xl font-bold text-foreground tracking-tight">Настройки</h1>
-        <p className="text-muted-foreground text-sm mt-1">Администрирование</p>
+    <div className="max-w-[430px] mx-auto min-h-[100dvh]">
+      {/* Header */}
+      <header className="px-5 pt-14 pb-4">
+        <h1 className="text-[34px] font-bold" style={{ color: "#000", letterSpacing: "-0.5px" }}>
+          Настройки
+        </h1>
       </header>
 
-      <div className="flex gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              tab === t ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <div className="px-4 space-y-4 pb-32">
+        {/* Tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {TABS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className="px-4 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors"
+              style={{
+                background: tab === key ? "#007AFF" : "rgba(118,118,128,0.12)",
+                color: tab === key ? "#fff" : "rgba(60,60,67,0.6)",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-      {tab === "Сотрудники" && <EmployeesTab toast={toast} />}
-      {tab === "Чек-листы" && <ChecklistsTab toast={toast} />}
-      {tab === "Роли" && <RolesTab />}
+        {tab === "employees" && <EmployeesTab toast={toast} />}
+        {tab === "checklists" && <ChecklistsTab toast={toast} />}
+        {tab === "roles" && <RolesTab />}
+      </div>
     </div>
   );
 }
 
+/* ─── EMPLOYEES TAB ──────────────────────────────── */
 function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +88,7 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
       active: true,
     });
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Сотрудник добавлен" });
+    toast({ title: "Сотрудник добавлен ✓" });
     setShowAdd(false);
     setForm({ full_name: "", role: "", can_evaluate: false });
     load();
@@ -100,7 +102,7 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
       can_evaluate: editTarget.can_evaluate,
     }).eq("id", editTarget.id);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Сохранено" });
+    toast({ title: "Сохранено ✓" });
     setEditTarget(null);
     load();
   };
@@ -110,92 +112,207 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
     load();
   };
 
-  if (loading) return <Loader2 className="h-6 w-6 animate-spin mx-auto mt-8" />;
+  const activeEmps = employees.filter((e) => e.active);
+  const inactiveEmps = employees.filter((e) => !e.active);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,122,255,0.2)", borderTopColor: "#007AFF" }} />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <Button size="sm" className="w-full" onClick={() => setShowAdd(true)}>
-        <Plus className="h-4 w-4 mr-1" /> Добавить сотрудника
-      </Button>
+    <div className="space-y-4">
+      {/* Add button */}
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        onClick={() => setShowAdd(true)}
+        className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
+        style={{ background: "#007AFF", color: "#fff", boxShadow: "0 4px 16px rgba(0,122,255,0.3)" }}
+      >
+        <Plus className="h-5 w-5" /> Добавить сотрудника
+      </motion.button>
 
-      {employees.map((emp) => (
-        <Card key={emp.id} className={emp.active ? "" : "opacity-50"}>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-semibold">{emp.full_name}</div>
-                <div className="text-sm text-muted-foreground">{emp.role}</div>
-                <div className="flex gap-1 mt-1">
-                  {emp.can_evaluate && <Badge variant="secondary" className="text-xs">Оценщик</Badge>}
-                  {!emp.active && <Badge variant="destructive" className="text-xs">Неактивен</Badge>}
+      {/* Active employees */}
+      {activeEmps.length > 0 && (
+        <div>
+          <p className="text-[13px] font-semibold px-1 mb-2" style={{ color: "rgba(60,60,67,0.6)" }}>
+            АКТИВНЫЕ · {activeEmps.length}
+          </p>
+          <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+            {activeEmps.map((emp, idx) => (
+              <div
+                key={emp.id}
+                className="flex items-center gap-3 px-4 py-3.5"
+                style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
+              >
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-[15px] font-bold flex-shrink-0"
+                  style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}
+                >
+                  {emp.full_name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[15px] font-medium truncate" style={{ color: "#000" }}>{emp.full_name}</div>
+                  <div className="text-[13px] flex items-center gap-2" style={{ color: "rgba(60,60,67,0.5)" }}>
+                    {emp.role}
+                    {emp.can_evaluate && (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}>
+                        Оценщик
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setEditTarget({ ...emp })}
+                    className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
+                    style={{ background: "rgba(60,60,67,0.08)" }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" style={{ color: "rgba(60,60,67,0.5)" }} />
+                  </button>
+                  <button
+                    onClick={() => toggleActive(emp)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
+                    style={{ background: "rgba(255,59,48,0.1)" }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" style={{ color: "#FF3B30" }} />
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditTarget({ ...emp })}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => toggleActive(emp)}
-                  title={emp.active ? "Деактивировать" : "Активировать"}
-                >
-                  {emp.active ? <Trash2 className="h-4 w-4 text-red-500" /> : <Plus className="h-4 w-4 text-green-600" />}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Новый сотрудник</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="Имя" value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} />
-            <Input placeholder="Роль" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} />
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.can_evaluate} onChange={(e) => setForm((f) => ({ ...f, can_evaluate: e.target.checked }))} />
-              Может проводить оценку
-            </label>
+            ))}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)}>Отмена</Button>
-            <Button onClick={saveNew}>Добавить</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
-      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Редактировать</DialogTitle></DialogHeader>
-          {editTarget && (
-            <div className="space-y-3">
-              <Input value={editTarget.full_name} onChange={(e) => setEditTarget((t) => t && ({ ...t, full_name: e.target.value }))} />
-              <Input value={editTarget.role} onChange={(e) => setEditTarget((t) => t && ({ ...t, role: e.target.value }))} />
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={editTarget.can_evaluate} onChange={(e) => setEditTarget((t) => t && ({ ...t, can_evaluate: e.target.checked }))} />
-                Может проводить оценку
-              </label>
+      {/* Inactive employees */}
+      {inactiveEmps.length > 0 && (
+        <div>
+          <p className="text-[13px] font-semibold px-1 mb-2" style={{ color: "rgba(60,60,67,0.6)" }}>
+            АРХИВ · {inactiveEmps.length}
+          </p>
+          <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+            {inactiveEmps.map((emp, idx) => (
+              <div
+                key={emp.id}
+                className="flex items-center gap-3 px-4 py-3.5 opacity-50"
+                style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
+              >
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-[15px] font-bold flex-shrink-0"
+                  style={{ background: "rgba(60,60,67,0.1)", color: "rgba(60,60,67,0.5)" }}
+                >
+                  {emp.full_name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[15px] font-medium truncate" style={{ color: "#000" }}>{emp.full_name}</div>
+                  <div className="text-[13px]" style={{ color: "rgba(60,60,67,0.5)" }}>{emp.role}</div>
+                </div>
+                <button
+                  onClick={() => toggleActive(emp)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
+                  style={{ background: "rgba(52,199,89,0.1)" }}
+                >
+                  <Plus className="h-3.5 w-3.5" style={{ color: "#34C759" }} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add sheet */}
+      <AnimatePresence>
+        {showAdd && (
+          <IosSheet title="Новый сотрудник" onClose={() => setShowAdd(false)}>
+            <div className="space-y-0 rounded-[16px] overflow-hidden" style={{ background: "rgba(118,118,128,0.08)" }}>
+              <input
+                className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none"
+                style={{ borderBottom: "0.5px solid rgba(60,60,67,0.12)" }}
+                placeholder="Имя"
+                value={form.full_name}
+                onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
+              />
+              <input
+                className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none"
+                placeholder="Роль"
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+              />
             </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditTarget(null)}>Отмена</Button>
-            <Button onClick={saveEdit}>Сохранить</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <div
+              className="flex items-center justify-between px-4 py-3.5 rounded-[16px] mt-3"
+              style={{ background: "rgba(118,118,128,0.08)" }}
+            >
+              <span className="text-[16px]" style={{ color: "#000" }}>Может проводить оценку</span>
+              <IosToggle checked={form.can_evaluate} onChange={(v) => setForm((f) => ({ ...f, can_evaluate: v }))} />
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={saveNew}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold mt-4"
+              style={{ background: "#007AFF", color: "#fff" }}
+            >
+              Добавить
+            </motion.button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Edit sheet */}
+      <AnimatePresence>
+        {editTarget && (
+          <IosSheet title="Редактировать" onClose={() => setEditTarget(null)}>
+            <div className="space-y-0 rounded-[16px] overflow-hidden" style={{ background: "rgba(118,118,128,0.08)" }}>
+              <input
+                className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none"
+                style={{ borderBottom: "0.5px solid rgba(60,60,67,0.12)" }}
+                placeholder="Имя"
+                value={editTarget.full_name}
+                onChange={(e) => setEditTarget((t) => t && ({ ...t, full_name: e.target.value }))}
+              />
+              <input
+                className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none"
+                placeholder="Роль"
+                value={editTarget.role}
+                onChange={(e) => setEditTarget((t) => t && ({ ...t, role: e.target.value }))}
+              />
+            </div>
+            <div
+              className="flex items-center justify-between px-4 py-3.5 rounded-[16px] mt-3"
+              style={{ background: "rgba(118,118,128,0.08)" }}
+            >
+              <span className="text-[16px]" style={{ color: "#000" }}>Может проводить оценку</span>
+              <IosToggle
+                checked={editTarget.can_evaluate}
+                onChange={(v) => setEditTarget((t) => t && ({ ...t, can_evaluate: v }))}
+              />
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={saveEdit}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold mt-4 flex items-center justify-center gap-2"
+              style={{ background: "#007AFF", color: "#fff" }}
+            >
+              <Check className="h-5 w-5" /> Сохранить
+            </motion.button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
+/* ─── CHECKLISTS TAB ─────────────────────────────── */
 function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
-  const [addingQuestion, setAddingQuestion] = useState<{ checklistId: number; sectionId: number } | null>(null);
+  const [showAddChecklist, setShowAddChecklist] = useState(false);
+  const [addingQuestion, setAddingQuestion] = useState<{ sectionId: number } | null>(null);
   const [newQuestion, setNewQuestion] = useState("");
 
   const load = async () => {
@@ -216,15 +333,14 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     await getSupabase().from("checklist_sections").insert({ checklist_id: cl.id, title: "Раздел 1", sort_order: 0 });
     setNewName("");
-    toast({ title: "Чек-лист создан" });
+    setShowAddChecklist(false);
+    toast({ title: "Чек-лист создан ✓" });
     load();
   };
 
   const addQuestion = async () => {
     if (!addingQuestion || !newQuestion.trim()) return;
-    const section = checklists
-      .flatMap((c) => c.checklist_sections)
-      .find((s) => s.id === addingQuestion.sectionId);
+    const section = checklists.flatMap((c) => c.checklist_sections).find((s) => s.id === addingQuestion.sectionId);
     const maxOrder = section ? Math.max(0, ...section.checklist_questions.map((q) => q.sort_order)) : 0;
     const { error } = await getSupabase().from("checklist_questions").insert({
       section_id: addingQuestion.sectionId,
@@ -234,7 +350,7 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     setNewQuestion("");
     setAddingQuestion(null);
-    toast({ title: "Вопрос добавлен" });
+    toast({ title: "Вопрос добавлен ✓" });
     load();
   };
 
@@ -244,121 +360,266 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
     load();
   };
 
-  if (loading) return <Loader2 className="h-6 w-6 animate-spin mx-auto mt-8" />;
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,122,255,0.2)", borderTopColor: "#007AFF" }} />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="flex gap-2">
-        <Input placeholder="Название нового чек-листа" value={newName} onChange={(e) => setNewName(e.target.value)} />
-        <Button size="sm" onClick={addChecklist}><Plus className="h-4 w-4" /></Button>
-      </div>
+    <div className="space-y-4">
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        onClick={() => setShowAddChecklist(true)}
+        className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
+        style={{ background: "#007AFF", color: "#fff", boxShadow: "0 4px 16px rgba(0,122,255,0.3)" }}
+      >
+        <Plus className="h-5 w-5" /> Новый чек-лист
+      </motion.button>
 
       {checklists.map((cl) => (
-        <Card key={cl.id}>
-          <CardContent className="p-4">
-            <button
-              className="w-full flex items-center justify-between font-semibold text-left"
-              onClick={() => setExpanded(expanded === cl.id ? null : cl.id)}
+        <div key={cl.id} className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <button
+            className="w-full flex items-center gap-3 px-4 py-4"
+            onClick={() => setExpanded(expanded === cl.id ? null : cl.id)}
+          >
+            <div className="w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 text-lg">
+              📋
+            </div>
+            <div className="flex-1 text-left">
+              <div className="text-[15px] font-semibold" style={{ color: "#000" }}>{cl.name}</div>
+              <div className="text-[13px]" style={{ color: "rgba(60,60,67,0.5)" }}>
+                {cl.checklist_sections.reduce((sum, s) => sum + s.checklist_questions.length, 0)} вопросов
+              </div>
+            </div>
+            <motion.div
+              animate={{ rotate: expanded === cl.id ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
             >
-              {cl.name}
-              {expanded === cl.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
+              <ChevronDown className="h-4 w-4" style={{ color: "rgba(60,60,67,0.3)" }} />
+            </motion.div>
+          </button>
 
+          <AnimatePresence>
             {expanded === cl.id && (
-              <div className="mt-3 space-y-3">
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                style={{ overflow: "hidden", borderTop: "0.5px solid rgba(60,60,67,0.12)" }}
+              >
                 {cl.checklist_sections.sort((a, b) => a.sort_order - b.sort_order).map((sec) => (
-                  <div key={sec.id}>
-                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{sec.title}</div>
-                    <div className="space-y-1.5">
-                      {sec.checklist_questions.sort((a, b) => a.sort_order - b.sort_order).map((q) => (
-                        <div key={q.id} className="flex items-start gap-2 group">
-                          <span className="flex-1 text-sm leading-snug">{q.question_text}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0"
+                  <div key={sec.id} className="px-4 py-3">
+                    <p className="text-[12px] font-semibold mb-2" style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.5px" }}>
+                      {sec.title.toUpperCase()}
+                    </p>
+                    <div className="space-y-0">
+                      {sec.checklist_questions.sort((a, b) => a.sort_order - b.sort_order).map((q, qi) => (
+                        <div
+                          key={q.id}
+                          className="flex items-center gap-2 py-2.5"
+                          style={{ borderTop: qi > 0 ? "0.5px solid rgba(60,60,67,0.08)" : "none" }}
+                        >
+                          <ChevronRight className="h-3 w-3 flex-shrink-0" style={{ color: "rgba(60,60,67,0.25)" }} />
+                          <span className="flex-1 text-[14px] leading-snug" style={{ color: "#000" }}>{q.question_text}</span>
+                          <button
                             onClick={() => deleteQuestion(q.id)}
+                            className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 active:opacity-60"
+                            style={{ background: "rgba(255,59,48,0.1)" }}
                           >
-                            <Trash2 className="h-3 w-3 text-red-500" />
-                          </Button>
+                            <X className="h-3 w-3" style={{ color: "#FF3B30" }} />
+                          </button>
                         </div>
                       ))}
                     </div>
 
                     {addingQuestion?.sectionId === sec.id ? (
-                      <div className="flex gap-2 mt-2">
-                        <Input
-                          className="text-sm h-8"
-                          placeholder="Текст вопроса"
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          className="flex-1 px-3 py-2 rounded-[12px] text-[14px] outline-none"
+                          style={{ background: "rgba(118,118,128,0.1)", color: "#000" }}
+                          placeholder="Текст вопроса..."
                           value={newQuestion}
                           onChange={(e) => setNewQuestion(e.target.value)}
                           autoFocus
+                          onKeyDown={(e) => { if (e.key === "Enter") addQuestion(); if (e.key === "Escape") setAddingQuestion(null); }}
                         />
-                        <Button size="sm" className="h-8" onClick={addQuestion}>OK</Button>
-                        <Button variant="outline" size="sm" className="h-8" onClick={() => setAddingQuestion(null)}>✕</Button>
+                        <button
+                          onClick={addQuestion}
+                          className="px-3 py-2 rounded-[12px] text-[14px] font-medium"
+                          style={{ background: "#007AFF", color: "#fff" }}
+                        >
+                          OK
+                        </button>
+                        <button
+                          onClick={() => setAddingQuestion(null)}
+                          className="px-3 py-2 rounded-[12px] text-[14px] font-medium"
+                          style={{ background: "rgba(60,60,67,0.1)", color: "rgba(60,60,67,0.6)" }}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
                     ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 h-7 text-xs text-muted-foreground"
-                        onClick={() => { setAddingQuestion({ checklistId: cl.id, sectionId: sec.id }); setNewQuestion(""); }}
+                      <button
+                        onClick={() => { setAddingQuestion({ sectionId: sec.id }); setNewQuestion(""); }}
+                        className="mt-2 flex items-center gap-1.5 text-[14px] active:opacity-60"
+                        style={{ color: "#007AFF" }}
                       >
-                        <Plus className="h-3 w-3 mr-1" /> Добавить вопрос
-                      </Button>
+                        <Plus className="h-3.5 w-3.5" /> Добавить вопрос
+                      </button>
                     )}
                   </div>
                 ))}
-              </div>
+              </motion.div>
             )}
-          </CardContent>
-        </Card>
+          </AnimatePresence>
+        </div>
       ))}
+
+      {/* Add checklist sheet */}
+      <AnimatePresence>
+        {showAddChecklist && (
+          <IosSheet title="Новый чек-лист" onClose={() => setShowAddChecklist(false)}>
+            <input
+              className="w-full px-4 py-3.5 text-[16px] rounded-[16px] outline-none"
+              style={{ background: "rgba(118,118,128,0.08)" }}
+              placeholder="Название чек-листа"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              autoFocus
+            />
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={addChecklist}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold mt-4 flex items-center justify-center gap-2"
+              style={{ background: "#007AFF", color: "#fff" }}
+            >
+              <Plus className="h-5 w-5" /> Создать
+            </motion.button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
+/* ─── ROLES TAB ──────────────────────────────────── */
 function RolesTab() {
-  const roles = [
-    { evaluator: "Team Leader", evaluates: "Менеджер по привлечению партнеров" },
-    { evaluator: "Диер О (Руководитель отдела)", evaluates: "Team Leader" },
-    { evaluator: "Азамат (Бизнес Поддержка)", evaluates: "Диер О" },
+  const matrix = [
+    { from: "Team Leader", to: "Менеджер по привлечению партнеров" },
+    { from: "Руководитель отдела", to: "Team Leader" },
+    { from: "Бизнес Поддержка", to: "Руководитель отдела" },
+  ];
+
+  const info = [
+    { label: "Версия", value: "1.1.0" },
+    { label: "База данных", value: "Supabase" },
+    { label: "Платформа", value: "Telegram Mini App" },
   ];
 
   return (
-    <div className="space-y-3">
-      <Card>
-        <CardContent className="p-4">
-          <p className="text-sm text-muted-foreground mb-3">
-            Текущая схема "кто кого оценивает". Изменение схемы требует правки кода.
-          </p>
-          <div className="space-y-3">
-            {roles.map((r, i) => (
-              <div key={i} className="text-sm">
-                <span className="font-semibold">{r.evaluator}</span>
-                <span className="text-muted-foreground mx-2">→</span>
-                <span>{r.evaluates}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Версия приложения</span>
-            <Badge variant="secondary">1.1.0</Badge>
-          </div>
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-sm font-medium">База данных</span>
-            <Badge variant="secondary" className="bg-green-100 text-green-700">Supabase</Badge>
-          </div>
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-sm font-medium">Платформа</span>
-            <Badge variant="secondary">Telegram Mini App</Badge>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      <div>
+        <p className="text-[13px] font-semibold px-1 mb-2" style={{ color: "rgba(60,60,67,0.6)" }}>
+          КТО ОЦЕНИВАЕТ КОГО
+        </p>
+        <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          {matrix.map(({ from, to }, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-2 px-4 py-3.5"
+              style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
+            >
+              <span className="text-[14px] font-medium flex-1" style={{ color: "#000" }}>{from}</span>
+              <span className="text-[13px] px-2" style={{ color: "rgba(60,60,67,0.4)" }}>→</span>
+              <span className="text-[14px] flex-1 text-right" style={{ color: "rgba(60,60,67,0.7)" }}>{to}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[12px] px-1 mt-2" style={{ color: "rgba(60,60,67,0.45)" }}>
+          Изменение схемы требует правки кода разработчиком.
+        </p>
+      </div>
+
+      <div>
+        <p className="text-[13px] font-semibold px-1 mb-2" style={{ color: "rgba(60,60,67,0.6)" }}>
+          О ПРИЛОЖЕНИИ
+        </p>
+        <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          {info.map(({ label, value }, idx) => (
+            <div
+              key={label}
+              className="flex items-center justify-between px-4 py-3.5"
+              style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
+            >
+              <span className="text-[15px]" style={{ color: "#000" }}>{label}</span>
+              <span className="text-[15px]" style={{ color: "rgba(60,60,67,0.5)" }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
+  );
+}
+
+/* ─── SHARED COMPONENTS ──────────────────────────── */
+function IosSheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-40"
+        style={{ background: "rgba(0,0,0,0.4)" }}
+        onClick={onClose}
+      />
+      {/* Sheet */}
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="fixed bottom-0 left-0 right-0 z-50 max-w-[430px] mx-auto rounded-t-[24px] px-4 pt-5 pb-10"
+        style={{ background: "#F2F2F7" }}
+      >
+        {/* Drag handle */}
+        <div className="w-9 h-1 rounded-full mx-auto mb-4" style={{ background: "rgba(60,60,67,0.2)" }} />
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-[20px] font-bold" style={{ color: "#000", letterSpacing: "-0.3px" }}>{title}</h2>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(60,60,67,0.12)" }}
+          >
+            <X className="h-4 w-4" style={{ color: "rgba(60,60,67,0.6)" }} />
+          </button>
+        </div>
+        {children}
+      </motion.div>
+    </>
+  );
+}
+
+function IosToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="relative w-[51px] h-[31px] rounded-full transition-colors duration-200 flex-shrink-0"
+      style={{ background: checked ? "#34C759" : "rgba(120,120,128,0.16)" }}
+    >
+      <motion.div
+        className="absolute top-[2px] w-[27px] h-[27px] rounded-full"
+        style={{ background: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.25)" }}
+        animate={{ left: checked ? "22px" : "2px" }}
+        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      />
+    </button>
   );
 }

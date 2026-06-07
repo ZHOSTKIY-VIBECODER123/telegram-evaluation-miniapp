@@ -3,156 +3,151 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useEvaluation } from "@/context/EvaluationContext";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScoreButton } from "@/components/ScoreButton";
-import { ProgressBar } from "@/components/ProgressBar";
 
 export default function EvaluationForm() {
   const [, setLocation] = useLocation();
-  const {
-    selectedChecklist,
-    selectedEmployee,
-    currentQuestionIndex,
-    setCurrentQuestionIndex,
-    answers,
-    setAnswer,
-  } = useEvaluation();
-
+  const { selectedChecklist, selectedEmployee, currentQuestionIndex, setCurrentQuestionIndex, answers, setAnswer } = useEvaluation();
   const [direction, setDirection] = useState(1);
 
   useEffect(() => {
-    if (!selectedChecklist || !selectedEmployee) {
-      setLocation("/");
-    }
+    if (!selectedChecklist || !selectedEmployee) setLocation("/");
   }, [selectedChecklist, selectedEmployee, setLocation]);
 
   if (!selectedChecklist || !selectedEmployee) return null;
 
   const totalQuestions = selectedChecklist.questions.length;
   const currentQuestion = selectedChecklist.questions[currentQuestionIndex];
-  const currentAnswer = answers[currentQuestionIndex] || {
-    score: null,
-    comment: "",
-  };
-
+  const currentAnswer = answers[currentQuestionIndex] || { score: null, comment: "" };
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
+  const progress = (currentQuestionIndex + 1) / totalQuestions;
 
   const handleNext = () => {
-    if (isLastQuestion) {
-      setLocation("/results");
-    } else {
-      setDirection(1);
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-    }
+    if (isLastQuestion) setLocation("/results");
+    else { setDirection(1); setCurrentQuestionIndex(currentQuestionIndex + 1); }
   };
 
   const handlePrev = () => {
-    if (currentQuestionIndex > 0) {
-      setDirection(-1);
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
-    } else {
-      setLocation("/employees");
-    }
+    if (currentQuestionIndex > 0) { setDirection(-1); setCurrentQuestionIndex(currentQuestionIndex - 1); }
+    else setLocation("/employees");
   };
 
   return (
-    <div className="max-w-[430px] mx-auto min-h-[100dvh] bg-background flex flex-col overflow-hidden relative">
-      <header className="bg-primary text-primary-foreground p-4 sticky top-0 z-20 shadow-md">
-        <div className="flex items-center gap-3 mb-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 -ml-2 text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground"
+    <div className="max-w-[430px] mx-auto min-h-[100dvh] flex flex-col overflow-hidden" style={{ background: "hsl(240 5% 96%)" }}>
+
+      {/* Header with glass blur */}
+      <header
+        className="sticky top-0 z-20 px-4 pt-12 pb-3"
+        style={{ background: "rgba(242,242,247,0.92)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <button
             onClick={handlePrev}
+            className="flex items-center gap-0.5 text-[17px] active:opacity-60 transition-opacity"
+            style={{ color: "#007AFF" }}
           >
             <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold truncate">
-              {selectedChecklist.name}
-            </h1>
-            <p className="text-sm opacity-90 truncate">
-              {selectedEmployee.name} • {selectedEmployee.role}
-            </p>
-          </div>
+            Назад
+          </button>
+          <span className="text-[15px] font-medium" style={{ color: "rgba(60,60,67,0.6)" }}>
+            {currentQuestionIndex + 1} / {totalQuestions}
+          </span>
         </div>
-        <div className="bg-primary-foreground/20 rounded-full p-1 pb-3">
-          <ProgressBar
-            current={currentQuestionIndex + 1}
-            total={totalQuestions}
+
+        {/* Progress bar */}
+        <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(60,60,67,0.12)" }}>
+          <motion.div
+            className="h-full rounded-full"
+            style={{ background: "#007AFF" }}
+            animate={{ width: `${progress * 100}%` }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
           />
+        </div>
+
+        <div className="mt-2">
+          <p className="text-[13px] font-medium truncate" style={{ color: "rgba(60,60,67,0.6)" }}>
+            {selectedChecklist.name} · {selectedEmployee.name}
+          </p>
         </div>
       </header>
 
-      <div className="flex-1 relative">
+      {/* Question */}
+      <div className="flex-1 relative overflow-hidden">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={currentQuestionIndex}
             custom={direction}
-            initial={{ opacity: 0, x: direction * 50 }}
+            initial={{ opacity: 0, x: direction * 40 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: direction * -50 }}
+            exit={{ opacity: 0, x: direction * -40 }}
             transition={{ type: "tween", ease: "easeInOut", duration: 0.2 }}
-            className="absolute inset-0 p-4 flex flex-col gap-6 overflow-y-auto pb-24"
+            className="absolute inset-0 px-4 pt-6 pb-28 flex flex-col gap-6 overflow-y-auto"
           >
-            <div className="space-y-4">
-              <h2 className="text-xl font-medium leading-snug">
+            {/* Question card */}
+            <div
+              className="rounded-[20px] p-5"
+              style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+            >
+              <p className="text-[19px] font-semibold leading-snug" style={{ color: "#000", letterSpacing: "-0.2px" }}>
                 {currentQuestion}
-              </h2>
+              </p>
             </div>
 
-            <div className="grid grid-cols-4 gap-3">
-              {[0, 1, 2, 3].map((score) => (
-                <ScoreButton
-                  key={score}
-                  score={score}
-                  selected={currentAnswer.score === score}
-                  onClick={() =>
-                    setAnswer(currentQuestionIndex, { ...currentAnswer, score })
-                  }
-                  data-testid={`button-score-${score}`}
-                />
-              ))}
+            {/* Score buttons */}
+            <div>
+              <p className="text-[13px] font-medium mb-3 px-1" style={{ color: "rgba(60,60,67,0.6)" }}>ОЦЕНКА</p>
+              <div className="grid grid-cols-4 gap-2.5">
+                {[0, 1, 2, 3].map((score) => (
+                  <ScoreButton
+                    key={score}
+                    score={score}
+                    selected={currentAnswer.score === score}
+                    onClick={() => setAnswer(currentQuestionIndex, { ...currentAnswer, score })}
+                    data-testid={`button-score-${score}`}
+                  />
+                ))}
+              </div>
             </div>
 
-            <div className="space-y-2 mt-4">
-              <label className="text-sm font-medium text-muted-foreground">
-                Comments (optional)
-              </label>
+            {/* Comment */}
+            <div>
+              <p className="text-[13px] font-medium mb-2 px-1" style={{ color: "rgba(60,60,67,0.6)" }}>КОММЕНТАРИЙ</p>
               <Textarea
-                placeholder="Add a comment..."
-                className="min-h-[120px] resize-none bg-muted/30 focus-visible:ring-primary/50"
+                placeholder="Необязательно..."
+                className="min-h-[100px] resize-none rounded-[16px] border-0 text-[15px]"
+                style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
                 value={currentAnswer.comment}
-                onChange={(e) =>
-                  setAnswer(currentQuestionIndex, {
-                    ...currentAnswer,
-                    comment: e.target.value,
-                  })
-                }
+                onChange={(e) => setAnswer(currentQuestionIndex, { ...currentAnswer, comment: e.target.value })}
               />
             </div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto p-4 bg-background/80 backdrop-blur-md border-t z-20">
-        <Button
-          className="w-full h-12 text-lg font-semibold rounded-xl"
+      {/* Bottom action */}
+      <div
+        className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto px-4 pb-8 pt-3"
+        style={{ background: "rgba(242,242,247,0.92)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}
+      >
+        <motion.button
+          whileTap={{ scale: 0.97 }}
           disabled={currentAnswer.score === null}
           onClick={handleNext}
+          className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2 transition-opacity"
+          style={{
+            background: currentAnswer.score !== null ? "#007AFF" : "rgba(0,122,255,0.3)",
+            color: "#fff",
+            boxShadow: currentAnswer.score !== null ? "0 4px 16px rgba(0,122,255,0.4)" : "none",
+          }}
           data-testid={isLastQuestion ? "button-finish" : "button-next"}
         >
           {isLastQuestion ? (
-            <>
-              Finish Evaluation <Check className="ml-2 h-5 w-5" />
-            </>
+            <><Check className="h-5 w-5" /> Завершить</>
           ) : (
-            <>
-              Next Question <ChevronRight className="ml-2 h-5 w-5" />
-            </>
+            <>Далее <ChevronRight className="h-5 w-5" /></>
           )}
-        </Button>
+        </motion.button>
       </div>
     </div>
   );

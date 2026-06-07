@@ -1,33 +1,20 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ChevronLeft, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useEvaluation } from "@/context/EvaluationContext";
 import { useEmployees } from "@/hooks/useEmployees";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 
 export default function EmployeeSelection() {
   const [, setLocation] = useLocation();
-  const {
-    selectedChecklist,
-    setSelectedEmployee,
-    selectedEvaluator,
-    setSelectedEvaluator,
-  } = useEvaluation();
+  const { selectedChecklist, setSelectedEmployee, selectedEvaluator, setSelectedEvaluator } = useEvaluation();
   const [searchQuery, setSearchQuery] = useState("");
-  const { employees, loading, error } = useEmployees();
+  const { employees, loading } = useEmployees();
 
   const evaluators = employees.filter((e) => e.canEvaluate);
 
-  if (!selectedChecklist) {
-    setLocation("/");
-    return null;
-  }
+  if (!selectedChecklist) { setLocation("/"); return null; }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleSelect = (employee: any) => {
     setSelectedEmployee(employee);
     setLocation("/evaluate");
@@ -35,17 +22,9 @@ export default function EmployeeSelection() {
 
   const filteredEmployees = employees.filter((emp) => {
     if (!selectedEvaluator) return false;
-
-    if (selectedEvaluator.role === "Team Leader") {
-      return emp.role === "Менеджер по привлечению партнеров";
-    }
-    if (selectedEvaluator.name === "Диер О") {
-      return emp.role === "Team Leader";
-    }
-    if (selectedEvaluator.name === "Азамат") {
-      return emp.name === "Диер О";
-    }
-
+    if (selectedEvaluator.role === "Team Leader") return emp.role === "Менеджер по привлечению партнеров";
+    if (selectedEvaluator.name === "Диер О") return emp.role === "Team Leader";
+    if (selectedEvaluator.name === "Азамат") return emp.name === "Диер О";
     return false;
   }).filter(
     (emp) =>
@@ -53,101 +32,116 @@ export default function EmployeeSelection() {
       emp.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  console.log("SELECTED:", selectedEvaluator);
-  console.log("EMPLOYEES:", employees);
-
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      transition={{ type: "tween", ease: "anticipate", duration: 0.3 }}
-      className="max-w-[430px] mx-auto min-h-[100dvh] bg-background flex flex-col"
+      transition={{ type: "tween", ease: "anticipate", duration: 0.25 }}
+      className="max-w-[430px] mx-auto min-h-[100dvh] flex flex-col"
     >
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b p-4 flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-8 w-8 -ml-2" onClick={() => setLocation("/")}>
+      {/* Header */}
+      <header className="sticky top-0 z-10 px-4 pt-12 pb-3" style={{ background: "rgba(242,242,247,0.92)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => setLocation("/")}
+            className="flex items-center gap-0.5 text-[17px] font-normal active:opacity-60 transition-opacity"
+            style={{ color: "#007AFF" }}
+          >
             <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold tracking-tight">Select Employee</h1>
-            <p className="text-xs text-primary font-medium truncate">{selectedChecklist.name}</p>
+            Назад
+          </button>
+        </div>
+        <h1 className="text-[28px] font-bold mb-3" style={{ color: "#000", letterSpacing: "-0.3px" }}>
+          Сотрудники
+        </h1>
+
+        {/* Evaluator picker */}
+        <div
+          className="rounded-[12px] overflow-hidden mb-3"
+          style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+        >
+          <div className="px-4 py-2.5 flex items-center gap-3">
+            <span className="text-[13px] font-medium flex-shrink-0" style={{ color: "rgba(60,60,67,0.6)" }}>Оценщик</span>
+            <select
+              value={selectedEvaluator?.id || ""}
+              onChange={(e) => {
+                const ev = evaluators.find((x) => x.id === e.target.value);
+                if (ev) setSelectedEvaluator(ev);
+              }}
+              className="flex-1 text-[15px] font-medium bg-transparent outline-none text-right appearance-none"
+              style={{ color: "#007AFF", direction: "rtl" }}
+            >
+              <option value="" style={{ direction: "ltr", color: "#000" }}>Выберите...</option>
+              {evaluators.map((e) => (
+                <option key={e.id} value={e.id} style={{ direction: "ltr", color: "#000" }}>{e.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <div className="mt-3">
-          <label className="text-sm font-medium">
-            Кто проводит оценку
-          </label>
-          <select
-            className="w-full mt-2 border rounded-md p-2"
-            value={selectedEvaluator?.id || ""}
-            onChange={(e) => {
-              const evaluator = evaluators.find((x) => x.id === e.target.value);
-              if (evaluator) setSelectedEvaluator(evaluator);
-            }}
-            data-testid="select-evaluator"
-          >
-            <option value="">Выберите сотрудника</option>
-            {evaluators.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search employees..."
-            className="pl-9 bg-muted/50 border-transparent focus-visible:ring-primary/50"
+        {/* Search */}
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-[12px]"
+          style={{ background: "rgba(118,118,128,0.12)" }}
+        >
+          <Search className="h-4 w-4 flex-shrink-0" style={{ color: "rgba(60,60,67,0.5)" }} />
+          <input
+            placeholder="Поиск"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent outline-none text-[15px]"
+            style={{ color: "#000" }}
           />
         </div>
       </header>
 
-      <div className="flex-1 p-4 flex flex-col gap-2 overflow-y-auto">
+      <div className="flex-1 px-4 pt-3">
         {loading && (
-          <div className="text-center py-8">
-            Загрузка сотрудников...
+          <div className="flex justify-center py-16">
+            <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,122,255,0.2)", borderTopColor: "#007AFF" }} />
           </div>
         )}
 
-        {error && (
-          <div className="text-center py-8 text-red-500">
-            {error}
+        {!loading && !selectedEvaluator && (
+          <div className="flex justify-center py-16 text-[15px]" style={{ color: "rgba(60,60,67,0.5)" }}>
+            Сначала выберите оценщика
           </div>
         )}
 
-        {!loading && !error && !selectedEvaluator && (
-          <div className="text-center py-8 text-muted-foreground text-sm">
-            Выберите сотрудника, который проводит оценку
+        {!loading && selectedEvaluator && filteredEmployees.length === 0 && (
+          <div className="flex justify-center py-16 text-[15px]" style={{ color: "rgba(60,60,67,0.5)" }}>
+            Сотрудники не найдены
           </div>
         )}
 
-        {!loading && !error && selectedEvaluator && (
-          filteredEmployees.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No employees found
-            </div>
-          ) : (
-            filteredEmployees.map((employee) => (
-              <Card
+        {!loading && selectedEvaluator && filteredEmployees.length > 0 && (
+          <div
+            className="rounded-[20px] overflow-hidden"
+            style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+          >
+            {filteredEmployees.map((employee, idx) => (
+              <motion.button
                 key={employee.id}
-                className="p-3 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-transform hover:border-primary/50"
+                whileTap={{ scale: 0.98 }}
                 onClick={() => handleSelect(employee)}
-                data-testid={`card-employee-${employee.id}`}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
               >
-                <EmployeeAvatar name={employee.name} />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-foreground truncate">{employee.name}</h3>
-                  <p className="text-sm text-muted-foreground truncate">{employee.role}</p>
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-[17px] font-semibold"
+                  style={{ background: "rgba(0,122,255,0.12)", color: "#007AFF" }}
+                >
+                  {employee.name.charAt(0)}
                 </div>
-              </Card>
-            ))
-          )
+                <div className="flex-1 min-w-0">
+                  <div className="text-[17px] font-medium truncate" style={{ color: "#000" }}>{employee.name}</div>
+                  <div className="text-[13px]" style={{ color: "rgba(60,60,67,0.6)" }}>{employee.role}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: "rgba(60,60,67,0.3)" }} />
+              </motion.button>
+            ))}
+          </div>
         )}
       </div>
     </motion.div>
