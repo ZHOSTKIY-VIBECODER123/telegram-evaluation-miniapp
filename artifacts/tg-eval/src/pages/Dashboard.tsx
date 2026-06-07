@@ -85,6 +85,16 @@ export default function Dashboard() {
         </div>
 
         <div>{tab}</div>
+
+        {tab === "questions" && (
+          <div className="space-y-3">
+            <Card>
+              <CardContent className="p-4">
+                Аналитика по вопросам скоро появится
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </header>
 
       {stats.length === 0 && (
