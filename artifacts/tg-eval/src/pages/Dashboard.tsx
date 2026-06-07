@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { getSupabase } from "@/lib/supabase";
-import { Download, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 
 type EvalRecord = {
@@ -113,43 +113,11 @@ export default function Dashboard() {
       .sort((a, b) => Number(b.avg) - Number(a.avg));
   }, [filtered]);
 
-  const exportCSV = () => {
-    const BOM = "﻿";
-    const headers = ["Дата", "Оценщик", "Сотрудник", "Чек-лист", "Средний балл", "Итоговый балл"];
-    const rows = filtered.map((r) => [
-      new Date(r.created_at).toLocaleString("ru-RU"),
-      r.evaluator_name || "",
-      r.employee_name,
-      r.checklist_name,
-      String(r.average_score),
-      String(r.total_score),
-    ]);
-    const csv = BOM + [headers, ...rows].map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `оценки_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="max-w-[430px] mx-auto min-h-[100dvh]">
       {/* Header */}
-      <header className="px-5 pt-14 pb-4 flex items-end justify-between">
-        <div>
-          <h1 className="text-[34px] font-bold" style={{ color: "#000", letterSpacing: "-0.5px" }}>Аналитика</h1>
-        </div>
-        <motion.button
-          whileTap={{ scale: 0.94 }}
-          onClick={exportCSV}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium"
-          style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}
-        >
-          <Download className="h-3.5 w-3.5" />
-          CSV
-        </motion.button>
+      <header className="px-5 pt-14 pb-4">
+        <h1 className="text-[34px] font-bold" style={{ color: "#000", letterSpacing: "-0.5px" }}>Аналитика</h1>
       </header>
 
       <div className="px-4 space-y-4">
