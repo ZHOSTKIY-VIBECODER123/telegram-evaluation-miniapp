@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { getSupabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Download } from "lucide-react";
 
 type EvalRecord = {
   id: string;
@@ -155,6 +156,27 @@ export default function Dashboard() {
     </button>
   );
 
+  const exportCSV = () => {
+    const BOM = "﻿";
+    const headers = ["Дата", "Оценщик", "Сотрудник", "Чек-лист", "Средний балл", "Итоговый балл"];
+    const rows = filtered.map((r) => [
+      new Date(r.created_at).toLocaleString("ru-RU"),
+      r.evaluator_name || "",
+      r.employee_name,
+      r.checklist_name,
+      String(r.average_score),
+      String(r.total_score),
+    ]);
+    const csv = BOM + [headers, ...rows].map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `оценки_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const scoreColor = (avg: string) => {
     const n = Number(avg);
     if (n >= 2.5) return "text-green-600";
@@ -172,10 +194,14 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-[430px] mx-auto p-4 space-y-4">
-      <header className="py-4">
+      <header className="py-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">
           Аналитика
         </h1>
+        <Button variant="outline" size="sm" onClick={exportCSV} className="flex items-center gap-1.5">
+          <Download className="h-4 w-4" />
+          CSV
+        </Button>
       </header>
 
       <div className="grid grid-cols-3 gap-2">
