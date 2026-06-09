@@ -96,9 +96,13 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
 
   const saveEdit = async () => {
     if (!editTarget) return;
+    if (!editTarget.full_name.trim() || !editTarget.role.trim()) {
+      toast({ title: "Заполните имя и роль", variant: "destructive" });
+      return;
+    }
     const { error } = await getSupabase().from("employees").update({
-      full_name: editTarget.full_name,
-      role: editTarget.role,
+      full_name: editTarget.full_name.trim(),
+      role: editTarget.role.trim(),
       can_evaluate: editTarget.can_evaluate,
     }).eq("id", editTarget.id);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
@@ -108,7 +112,8 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
   };
 
   const toggleActive = async (emp: Employee) => {
-    await getSupabase().from("employees").update({ active: !emp.active }).eq("id", emp.id);
+    const { error } = await getSupabase().from("employees").update({ active: !emp.active }).eq("id", emp.id);
+    if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     load();
   };
 
@@ -332,7 +337,12 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
     if (!newName.trim()) return;
     const { data: cl, error } = await getSupabase().from("checklists").insert({ name: newName.trim() }).select().single();
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
-    await getSupabase().from("checklist_sections").insert({ checklist_id: cl.id, title: "Раздел 1", sort_order: 0 });
+    const { error: secError } = await getSupabase().from("checklist_sections").insert({ checklist_id: cl.id, title: "Раздел 1", sort_order: 0 });
+    if (secError) {
+      await getSupabase().from("checklists").delete().eq("id", cl.id);
+      toast({ title: "Ошибка", description: "Не удалось создать раздел", variant: "destructive" });
+      return;
+    }
     setNewName("");
     setShowAddChecklist(false);
     toast({ title: "Чек-лист создан ✓" });

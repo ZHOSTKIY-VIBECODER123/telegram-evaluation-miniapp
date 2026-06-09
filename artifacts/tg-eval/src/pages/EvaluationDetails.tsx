@@ -35,15 +35,19 @@ export default function EvaluationDetails() {
   useEffect(() => {
     async function load() {
       if (!params?.id) return;
-      const { data } = await getSupabase()
+      const { data, error } = await getSupabase()
         .from("evaluation_results")
         .select("*")
         .eq("id", params.id)
         .single();
-      if (data) setEvaluation(data);
+      if (error || !data) {
+        setLocation("/history");
+        return;
+      }
+      setEvaluation(data);
     }
     load();
-  }, [params]);
+  }, [params, setLocation]);
 
   if (!evaluation) {
     return (

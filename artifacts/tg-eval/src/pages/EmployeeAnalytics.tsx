@@ -26,18 +26,25 @@ export default function EmployeeAnalytics() {
   const [, setLocation] = useLocation();
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
       if (!params?.employee) return;
       const employeeName = decodeURIComponent(params.employee);
-      const { data } = await getSupabase()
-        .from("evaluation_results")
-        .select("*")
-        .eq("employee_name", employeeName)
-        .order("created_at", { ascending: true });
-      setEvaluations(data || []);
-      setLoading(false);
+      try {
+        const { data, error: sbError } = await getSupabase()
+          .from("evaluation_results")
+          .select("*")
+          .eq("employee_name", employeeName)
+          .order("created_at", { ascending: true });
+        if (sbError) { setLoadError(sbError.message); return; }
+        setEvaluations(data || []);
+      } catch (err: unknown) {
+        setLoadError(err instanceof Error ? err.message : "Не удалось загрузить данные");
+      } finally {
+        setLoading(false);
+      }
     }
     loadData();
   }, [params]);
@@ -89,6 +96,11 @@ export default function EmployeeAnalytics() {
       </header>
 
       <div className="px-4 pt-4 space-y-4">
+        {loadError && (
+          <div className="rounded-2xl p-4 text-sm" style={{ background: "rgba(255,59,48,0.1)", color: "#FF3B30" }}>
+            {loadError}
+          </div>
+        )}
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,122,255,0.2)", borderTopColor: "#007AFF" }} />

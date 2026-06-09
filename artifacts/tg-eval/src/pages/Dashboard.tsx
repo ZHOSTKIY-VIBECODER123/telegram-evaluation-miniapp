@@ -25,6 +25,7 @@ const TABS = [
 
 const scoreColor = (avg: string | number) => {
   const n = Number(avg);
+  if (isNaN(n)) return "rgba(60,60,67,0.3)";
   if (n >= 2.5) return "#34C759";
   if (n >= 1.5) return "#FF9500";
   return "#FF3B30";
@@ -34,6 +35,7 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [rawData, setRawData] = useState<EvalRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState("employees");
   const [filterEmployee, setFilterEmployee] = useState("");
   const [filterChecklist, setFilterChecklist] = useState("");
@@ -41,12 +43,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function loadData() {
-      const { data } = await getSupabase()
-        .from("evaluation_results")
-        .select("*")
-        .order("created_at", { ascending: false });
-      setRawData(data || []);
-      setLoading(false);
+      try {
+        const { data, error: sbError } = await getSupabase()
+          .from("evaluation_results")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (sbError) { setLoadError(sbError.message); return; }
+        setRawData(data || []);
+      } catch (err: unknown) {
+        setLoadError(err instanceof Error ? err.message : "Не удалось загрузить данные");
+      } finally {
+        setLoading(false);
+      }
     }
     loadData();
   }, []);
@@ -88,11 +96,24 @@ export default function Dashboard() {
     const grouped: Record<string, { total: number; count: number }> = {};
     filtered.forEach((r) => {
       (Array.isArray(r.answers) ? r.answers : []).forEach((a: any) => {
-        const q = a.question || "Без названия";
-        if (!grouped[q]) grouped[q] = { total: 0, count: 0 };
-        if (a.score !== null && a.score !== undefined) {
-          grouped[q].total += Number(a.score);
-          grouped[q].count += 1;
+        // Новый формат: { sectionTitle, sectionComment, items: [{question, score}] }
+        if (Array.isArray(a.items)) {
+          a.items.forEach((item: any) => {
+            const q = item.question || "Без названия";
+            if (!grouped[q]) grouped[q] = { total: 0, count: 0 };
+            if (item.score !== null && item.score !== undefined) {
+              grouped[q].total += Number(item.score);
+              grouped[q].count += 1;
+            }
+          });
+        } else {
+          // Старый плоский формат: { question, score }
+          const q = a.question || "Без названия";
+          if (!grouped[q]) grouped[q] = { total: 0, count: 0 };
+          if (a.score !== null && a.score !== undefined) {
+            grouped[q].total += Number(a.score);
+            grouped[q].count += 1;
+          }
         }
       });
     });
@@ -121,6 +142,11 @@ export default function Dashboard() {
       </header>
 
       <div className="px-4 space-y-4">
+        {loadError && (
+          <div className="rounded-2xl p-4 text-sm" style={{ background: "rgba(255,59,48,0.1)", color: "#FF3B30" }}>
+            {loadError}
+          </div>
+        )}
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,122,255,0.2)", borderTopColor: "#007AFF" }} />

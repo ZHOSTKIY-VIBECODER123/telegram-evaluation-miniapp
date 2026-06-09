@@ -7,10 +7,12 @@ import { useChecklists } from "@/hooks/useChecklists";
 
 export default function ChecklistSelection() {
   const [, setLocation] = useLocation();
-  const { setSelectedChecklist } = useEvaluation();
+  const { setSelectedChecklist, reset } = useEvaluation();
   const { checklists, loading, error } = useChecklists();
 
   const handleSelect = (checklist: Checklist) => {
+    // Сбрасываем старые ответы/комментарии перед новой оценкой
+    reset();
     setSelectedChecklist(checklist);
     setLocation("/employees");
   };
