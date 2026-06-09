@@ -3,10 +3,19 @@ export interface Question {
   text: string;
 }
 
+export interface ChecklistSection {
+  id: string;
+  title: string;
+  questions: string[];
+}
+
 export interface Checklist {
   id: string;
   name: string;
   category: string;
+  /** Вопросы, сгруппированные по блокам (разделам) */
+  sections: ChecklistSection[];
+  /** Плоский список вопросов (sections.flatMap) — для обратной совместимости */
   questions: string[];
 }
 

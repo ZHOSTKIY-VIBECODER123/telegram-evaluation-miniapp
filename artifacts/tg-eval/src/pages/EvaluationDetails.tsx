@@ -4,15 +4,29 @@ import { motion } from "framer-motion";
 import { getSupabase } from "@/lib/supabase";
 import { ChevronLeft } from "lucide-react";
 
-const SCORE_CONFIG: Record<number, { bg: string; color: string; label: string }> = {
-  0: { bg: "rgba(255,59,48,0.1)", color: "#FF3B30", label: "Нет" },
-  1: { bg: "rgba(255,149,0,0.1)", color: "#FF9500", label: "Частично" },
-  2: { bg: "rgba(255,214,10,0.15)", color: "#C89000", label: "Хорошо" },
-  3: { bg: "rgba(52,199,89,0.1)", color: "#34C759", label: "Отлично" },
+const SCORE_CONFIG: Record<number, { bg: string; color: string }> = {
+  0: { bg: "rgba(255,59,48,0.1)",   color: "#FF3B30" },
+  1: { bg: "rgba(255,149,0,0.1)",   color: "#FF9500" },
+  2: { bg: "rgba(255,214,10,0.15)", color: "#C89000" },
+  3: { bg: "rgba(52,199,89,0.1)",   color: "#34C759" },
 };
+const SCORE_FALLBACK = { bg: "rgba(60,60,67,0.08)", color: "rgba(60,60,67,0.5)" };
 
 const scoreColor = (v: number) => v >= 2.5 ? "#34C759" : v >= 1.5 ? "#FF9500" : "#FF3B30";
 
+// ─── Detect format ───────────────────────────────────────────────────────────
+// New: answers[0].sectionTitle exists → array of { sectionTitle, sectionComment, items[] }
+// Old: array of { question, score, comment }
+
+interface OldAnswer   { question: string; score: number | null; comment?: string }
+interface NewItem     { question: string; score: number | null }
+interface NewSection  { sectionTitle: string; sectionComment: string; items: NewItem[] }
+
+function isNewFormat(answers: any[]): answers is NewSection[] {
+  return answers.length > 0 && typeof answers[0].sectionTitle === "string";
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function EvaluationDetails() {
   const [, params] = useRoute("/history/:id");
   const [, setLocation] = useLocation();
@@ -39,11 +53,15 @@ export default function EvaluationDetails() {
     );
   }
 
-  const answers: any[] = Array.isArray(evaluation.answers)
+  const rawAnswers: any[] = Array.isArray(evaluation.answers)
     ? evaluation.answers
     : Object.values(evaluation.answers || {});
 
   const avg = Number(evaluation.average_score);
+  const newFormat = isNewFormat(rawAnswers);
+  const totalQuestions = newFormat
+    ? rawAnswers.reduce((s: number, sec: NewSection) => s + sec.items.length, 0)
+    : rawAnswers.length;
 
   return (
     <div className="max-w-[430px] mx-auto min-h-[100dvh] pb-8">
@@ -101,45 +119,100 @@ export default function EvaluationDetails() {
           </div>
         </motion.div>
 
-        {/* Answers */}
+        {/* Answers label */}
         <p className="text-[13px] font-semibold px-1" style={{ color: "rgba(60,60,67,0.6)" }}>
-          ОТВЕТЫ · {answers.length}
+          ОТВЕТЫ · {totalQuestions}
         </p>
 
-        <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          {answers.map((answer: any, idx: number) => {
-            const cfg = answer.score !== null && answer.score !== undefined
-              ? SCORE_CONFIG[answer.score] ?? { bg: "rgba(60,60,67,0.08)", color: "rgba(60,60,67,0.5)", label: "—" }
-              : { bg: "rgba(60,60,67,0.08)", color: "rgba(60,60,67,0.5)", label: "—" };
+        {/* ── NEW FORMAT: sectioned ── */}
+        {newFormat && (rawAnswers as NewSection[]).map((section, si) => (
+          <div
+            key={si}
+            className="rounded-[20px] overflow-hidden"
+            style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+          >
+            {/* Section header */}
+            <div
+              className="px-4 py-2.5"
+              style={{ background: "rgba(0,122,255,0.05)", borderBottom: "0.5px solid rgba(60,60,67,0.12)" }}
+            >
+              <p className="text-[13px] font-semibold" style={{ color: "#007AFF" }}>
+                {section.sectionTitle}
+              </p>
+            </div>
 
-            return (
-              <div
-                key={idx}
-                className="flex items-start gap-3 px-4 py-3.5"
-                style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
-              >
+            {/* Items */}
+            {section.items.map((item: NewItem, qi: number) => {
+              const cfg = item.score !== null && item.score !== undefined
+                ? (SCORE_CONFIG[item.score] ?? SCORE_FALLBACK)
+                : SCORE_FALLBACK;
+              return (
                 <div
-                  className="flex-shrink-0 w-9 h-9 rounded-full flex flex-col items-center justify-center"
-                  style={{ background: cfg.bg }}
+                  key={qi}
+                  className="flex items-start gap-3 px-4 py-3.5"
+                  style={{ borderBottom: "0.5px solid rgba(60,60,67,0.08)" }}
                 >
-                  <span className="text-[15px] font-bold leading-none" style={{ color: cfg.color }}>
-                    {answer.score ?? "—"}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-medium leading-snug" style={{ color: "#000" }}>
-                    {answer.question || `Вопрос #${idx + 1}`}
+                  <div
+                    className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[15px] font-bold"
+                    style={{ background: cfg.bg, color: cfg.color }}
+                  >
+                    {item.score ?? "—"}
+                  </div>
+                  <p className="flex-1 text-[15px] leading-snug pt-1" style={{ color: "#000" }}>
+                    {item.question}
                   </p>
-                  {answer.comment && (
-                    <p className="mt-1.5 text-[13px] italic" style={{ color: "rgba(60,60,67,0.6)" }}>
-                      «{answer.comment}»
-                    </p>
-                  )}
                 </div>
+              );
+            })}
+
+            {/* Section comment */}
+            {section.sectionComment && (
+              <div className="px-4 py-3" style={{ borderTop: "0.5px solid rgba(60,60,67,0.08)" }}>
+                <p className="text-[11px] font-semibold mb-1" style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.3px" }}>
+                  КОММЕНТАРИЙ К БЛОКУ
+                </p>
+                <p className="text-[14px] italic" style={{ color: "rgba(60,60,67,0.7)" }}>
+                  «{section.sectionComment}»
+                </p>
               </div>
-            );
-          })}
-        </div>
+            )}
+          </div>
+        ))}
+
+        {/* ── OLD FORMAT: flat list ── */}
+        {!newFormat && (
+          <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+            {(rawAnswers as OldAnswer[]).map((answer, idx) => {
+              const cfg = answer.score !== null && answer.score !== undefined
+                ? (SCORE_CONFIG[answer.score] ?? SCORE_FALLBACK)
+                : SCORE_FALLBACK;
+              return (
+                <div
+                  key={idx}
+                  className="flex items-start gap-3 px-4 py-3.5"
+                  style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
+                >
+                  <div
+                    className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[15px] font-bold"
+                    style={{ background: cfg.bg, color: cfg.color }}
+                  >
+                    {answer.score ?? "—"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] font-medium leading-snug" style={{ color: "#000" }}>
+                      {answer.question || `Вопрос #${idx + 1}`}
+                    </p>
+                    {answer.comment && (
+                      <p className="mt-1.5 text-[13px] italic" style={{ color: "rgba(60,60,67,0.6)" }}>
+                        «{answer.comment}»
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

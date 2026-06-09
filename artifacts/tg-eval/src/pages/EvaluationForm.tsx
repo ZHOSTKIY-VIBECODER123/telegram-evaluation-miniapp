@@ -1,15 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { motion } from "framer-motion";
+import { ChevronLeft, Check } from "lucide-react";
 import { useEvaluation } from "@/context/EvaluationContext";
-import { Textarea } from "@/components/ui/textarea";
-import { ScoreButton } from "@/components/ScoreButton";
+
+const SCORE_CFG: Record<number, { color: string; tint: string; active: string }> = {
+  0: { color: "#FF3B30", tint: "rgba(255,59,48,0.1)",   active: "#FF3B30" },
+  1: { color: "#FF9500", tint: "rgba(255,149,0,0.1)",   active: "#FF9500" },
+  2: { color: "#C89000", tint: "rgba(255,214,10,0.15)", active: "#FFD60A" },
+  3: { color: "#34C759", tint: "rgba(52,199,89,0.1)",   active: "#34C759" },
+};
 
 export default function EvaluationForm() {
   const [, setLocation] = useLocation();
-  const { selectedChecklist, selectedEmployee, currentQuestionIndex, setCurrentQuestionIndex, answers, setAnswer } = useEvaluation();
-  const [direction, setDirection] = useState(1);
+  const {
+    selectedChecklist,
+    selectedEmployee,
+    answers,
+    setAnswer,
+    sectionComments,
+    setSectionComment,
+  } = useEvaluation();
 
   useEffect(() => {
     if (!selectedChecklist || !selectedEmployee) setLocation("/");
@@ -17,41 +28,48 @@ export default function EvaluationForm() {
 
   if (!selectedChecklist || !selectedEmployee) return null;
 
-  const totalQuestions = selectedChecklist.questions.length;
-  const currentQuestion = selectedChecklist.questions[currentQuestionIndex];
-  const currentAnswer = answers[currentQuestionIndex] || { score: null, comment: "" };
-  const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
-  const progress = (currentQuestionIndex + 1) / totalQuestions;
+  // Поддержка старых чеклистов без sections
+  const sections =
+    selectedChecklist.sections?.length > 0
+      ? selectedChecklist.sections
+      : [{ id: "default", title: "Вопросы", questions: selectedChecklist.questions }];
 
-  const handleNext = () => {
-    if (isLastQuestion) setLocation("/results");
-    else { setDirection(1); setCurrentQuestionIndex(currentQuestionIndex + 1); }
-  };
+  // Глобальные индексы: сколько вопросов до каждой секции
+  const offsets: number[] = [];
+  let off = 0;
+  for (const sec of sections) {
+    offsets.push(off);
+    off += sec.questions.length;
+  }
 
-  const handlePrev = () => {
-    if (currentQuestionIndex > 0) { setDirection(-1); setCurrentQuestionIndex(currentQuestionIndex - 1); }
-    else setLocation("/employees");
-  };
+  const total = selectedChecklist.questions.length;
+  const answered = Object.values(answers).filter((a) => a.score !== null).length;
+  const allAnswered = total > 0 && answered === total;
+  const progress = total > 0 ? answered / total : 0;
 
   return (
-    <div className="max-w-[430px] mx-auto min-h-[100dvh] flex flex-col overflow-hidden" style={{ background: "hsl(240 5% 96%)" }}>
+    <div className="max-w-[430px] mx-auto min-h-[100dvh] flex flex-col" style={{ background: "hsl(240 5% 96%)" }}>
 
-      {/* Header with glass blur */}
+      {/* Sticky glass header */}
       <header
         className="sticky top-0 z-20 px-4 pt-12 pb-3"
-        style={{ background: "rgba(242,242,247,0.92)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}
+        style={{
+          background: "rgba(242,242,247,0.92)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+        }}
       >
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <button
-            onClick={handlePrev}
+            onClick={() => setLocation("/employees")}
             className="flex items-center gap-0.5 text-[17px] active:opacity-60 transition-opacity"
             style={{ color: "#007AFF" }}
           >
             <ChevronLeft className="h-5 w-5" />
             Назад
           </button>
-          <span className="text-[15px] font-medium" style={{ color: "rgba(60,60,67,0.6)" }}>
-            {currentQuestionIndex + 1} / {totalQuestions}
+          <span className="text-[14px] font-semibold tabular-nums" style={{ color: "rgba(60,60,67,0.6)" }}>
+            {answered} / {total}
           </span>
         </div>
 
@@ -65,88 +83,121 @@ export default function EvaluationForm() {
           />
         </div>
 
-        <div className="mt-2">
-          <p className="text-[13px] font-medium truncate" style={{ color: "rgba(60,60,67,0.6)" }}>
-            {selectedChecklist.name} · {selectedEmployee.name}
-          </p>
-        </div>
+        <p className="text-[12px] mt-1.5 truncate" style={{ color: "rgba(60,60,67,0.5)" }}>
+          {selectedChecklist.name} · {selectedEmployee.name}
+        </p>
       </header>
 
-      {/* Question */}
-      <div className="flex-1 relative overflow-hidden">
-        <AnimatePresence mode="wait" custom={direction}>
-          <motion.div
-            key={currentQuestionIndex}
-            custom={direction}
-            initial={{ opacity: 0, x: direction * 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: direction * -40 }}
-            transition={{ type: "tween", ease: "easeInOut", duration: 0.2 }}
-            className="absolute inset-0 px-4 pt-6 pb-28 flex flex-col gap-6 overflow-y-auto"
-          >
-            {/* Question card */}
+      {/* Scrollable sections */}
+      <div className="flex-1 px-4 pt-4 pb-32 space-y-4">
+        {sections.map((section, si) => {
+          const secOffset = offsets[si];
+          return (
             <div
-              className="rounded-[20px] p-5"
+              key={section.id}
+              className="rounded-[20px] overflow-hidden"
               style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
             >
-              <p className="text-[19px] font-semibold leading-snug" style={{ color: "#000", letterSpacing: "-0.2px" }}>
-                {currentQuestion}
-              </p>
-            </div>
+              {/* Block header */}
+              <div
+                className="px-4 py-3"
+                style={{
+                  background: "rgba(0,122,255,0.05)",
+                  borderBottom: "0.5px solid rgba(60,60,67,0.12)",
+                }}
+              >
+                <p className="text-[14px] font-semibold" style={{ color: "#007AFF" }}>
+                  {section.title}
+                </p>
+              </div>
 
-            {/* Score buttons */}
-            <div>
-              <p className="text-[13px] font-medium mb-3 px-1" style={{ color: "rgba(60,60,67,0.6)" }}>ОЦЕНКА</p>
-              <div className="grid grid-cols-4 gap-2.5">
-                {[0, 1, 2, 3].map((score) => (
-                  <ScoreButton
-                    key={score}
-                    score={score}
-                    selected={currentAnswer.score === score}
-                    onClick={() => setAnswer(currentQuestionIndex, { ...currentAnswer, score })}
-                    data-testid={`button-score-${score}`}
-                  />
-                ))}
+              {/* Questions in this block */}
+              {section.questions.map((question, qi) => {
+                const idx = secOffset + qi;
+                const answer = answers[idx] || { score: null, comment: "" };
+                return (
+                  <div
+                    key={idx}
+                    className="px-4 pt-4 pb-3"
+                    style={{ borderBottom: "0.5px solid rgba(60,60,67,0.1)" }}
+                  >
+                    <p className="text-[15px] font-medium leading-snug mb-3" style={{ color: "#000" }}>
+                      {question}
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {([0, 1, 2, 3] as const).map((score) => {
+                        const cfg = SCORE_CFG[score];
+                        const isActive = answer.score === score;
+                        return (
+                          <motion.button
+                            key={score}
+                            whileTap={{ scale: 0.91 }}
+                            onClick={() => setAnswer(idx, { ...answer, score })}
+                            className="h-11 rounded-[12px] text-[18px] font-bold flex items-center justify-center"
+                            style={{
+                              background: isActive ? cfg.active : cfg.tint,
+                              color: isActive ? (score === 2 ? "#000" : "#fff") : cfg.color,
+                              boxShadow: isActive ? `0 3px 10px ${cfg.active}55` : "none",
+                            }}
+                          >
+                            {score}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Block comment */}
+              <div className="px-4 pt-3 pb-4">
+                <p
+                  className="text-[11px] font-semibold mb-2"
+                  style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.4px" }}
+                >
+                  КОММЕНТАРИЙ К БЛОКУ
+                </p>
+                <textarea
+                  className="w-full px-3 py-2.5 rounded-[12px] text-[14px] resize-none outline-none"
+                  style={{
+                    background: "rgba(118,118,128,0.08)",
+                    color: "#000",
+                    minHeight: 68,
+                  }}
+                  placeholder="Необязательно..."
+                  value={sectionComments[section.id] || ""}
+                  onChange={(e) => setSectionComment(section.id, e.target.value)}
+                  rows={3}
+                />
               </div>
             </div>
-
-            {/* Comment */}
-            <div>
-              <p className="text-[13px] font-medium mb-2 px-1" style={{ color: "rgba(60,60,67,0.6)" }}>КОММЕНТАРИЙ</p>
-              <Textarea
-                placeholder="Необязательно..."
-                className="min-h-[100px] resize-none rounded-[16px] border-0 text-[15px]"
-                style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
-                value={currentAnswer.comment}
-                onChange={(e) => setAnswer(currentQuestionIndex, { ...currentAnswer, comment: e.target.value })}
-              />
-            </div>
-          </motion.div>
-        </AnimatePresence>
+          );
+        })}
       </div>
 
-      {/* Bottom action */}
+      {/* Fixed bottom */}
       <div
         className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto px-4 pb-8 pt-3"
-        style={{ background: "rgba(242,242,247,0.92)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}
+        style={{
+          background: "rgba(242,242,247,0.92)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+        }}
       >
         <motion.button
-          whileTap={{ scale: 0.97 }}
-          disabled={currentAnswer.score === null}
-          onClick={handleNext}
-          className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2 transition-opacity"
+          whileTap={allAnswered ? { scale: 0.97 } : {}}
+          disabled={!allAnswered}
+          onClick={() => setLocation("/results")}
+          className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
           style={{
-            background: currentAnswer.score !== null ? "#007AFF" : "rgba(0,122,255,0.3)",
+            background: allAnswered ? "#007AFF" : "rgba(0,122,255,0.3)",
             color: "#fff",
-            boxShadow: currentAnswer.score !== null ? "0 4px 16px rgba(0,122,255,0.4)" : "none",
+            boxShadow: allAnswered ? "0 4px 16px rgba(0,122,255,0.4)" : "none",
           }}
-          data-testid={isLastQuestion ? "button-finish" : "button-next"}
+          data-testid="button-finish"
         >
-          {isLastQuestion ? (
-            <><Check className="h-5 w-5" /> Завершить</>
-          ) : (
-            <>Далее <ChevronRight className="h-5 w-5" /></>
-          )}
+          <Check className="h-5 w-5" />
+          Завершить
         </motion.button>
       </div>
     </div>

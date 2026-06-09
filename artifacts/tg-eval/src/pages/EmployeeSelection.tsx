@@ -20,17 +20,19 @@ export default function EmployeeSelection() {
     setLocation("/evaluate");
   };
 
-  const filteredEmployees = employees.filter((emp) => {
-    if (!selectedEvaluator) return false;
-    if (selectedEvaluator.role === "Team Leader") return emp.role === "Менеджер по привлечению партнеров";
-    if (selectedEvaluator.name === "Диер О") return emp.role === "Team Leader";
-    if (selectedEvaluator.name === "Азамат") return emp.name === "Диер О";
-    return false;
-  }).filter(
-    (emp) =>
-      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.role.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Показываем всех активных сотрудников, кроме самого оценщика
+  const filteredEmployees = employees
+    .filter((emp) => {
+      if (!selectedEvaluator) return false;
+      // Не показываем оценщика в списке оцениваемых
+      if (emp.id === selectedEvaluator.id) return false;
+      return true;
+    })
+    .filter(
+      (emp) =>
+        emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        emp.role.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   return (
     <motion.div

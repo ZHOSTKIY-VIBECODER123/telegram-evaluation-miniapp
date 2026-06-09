@@ -10,7 +10,14 @@ const SCORE_COLORS = ["#FF3B30", "#FF9500", "#FFD60A", "#34C759"] as const;
 
 export default function Results() {
   const [, setLocation] = useLocation();
-  const { selectedChecklist, selectedEmployee, selectedEvaluator, answers, reset } = useEvaluation();
+  const {
+    selectedChecklist,
+    selectedEmployee,
+    selectedEvaluator,
+    answers,
+    sectionComments,
+    reset,
+  } = useEvaluation();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -21,12 +28,29 @@ export default function Results() {
 
   if (!selectedChecklist || !selectedEmployee) return null;
 
+  // Секции (с поддержкой старых чеклистов без sections)
+  const sections =
+    selectedChecklist.sections?.length > 0
+      ? selectedChecklist.sections
+      : [{ id: "default", title: "Вопросы", questions: selectedChecklist.questions }];
+
+  // Глобальные индексы
+  const offsets: number[] = [];
+  let off = 0;
+  for (const sec of sections) {
+    offsets.push(off);
+    off += sec.questions.length;
+  }
+
   const totalQuestions = selectedChecklist.questions.length;
   const answeredQuestions = Object.values(answers).filter((a) => a.score !== null);
   const totalScore = answeredQuestions.reduce((sum, a) => sum + (a.score || 0), 0);
   const maxPossibleScore = totalQuestions * 3;
-  const averageScore = answeredQuestions.length > 0 ? (totalScore / answeredQuestions.length).toFixed(1) : "0.0";
-  const percentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) : 0;
+  const averageScore =
+    answeredQuestions.length > 0
+      ? (totalScore / answeredQuestions.length).toFixed(1)
+      : "0.0";
+  const percentage = maxPossibleScore > 0 ? totalScore / maxPossibleScore : 0;
 
   const avg = Number(averageScore);
   const accentColor = avg >= 2.5 ? "#34C759" : avg >= 1.5 ? "#FF9500" : "#FF3B30";
@@ -35,6 +59,16 @@ export default function Results() {
     if (saving || saved) return;
     setSaving(true);
     try {
+      // Сохраняем в секционном формате
+      const sectionedAnswers = sections.map((sec, si) => ({
+        sectionTitle: sec.title,
+        sectionComment: sectionComments[sec.id] || "",
+        items: sec.questions.map((question, qi) => ({
+          question,
+          score: answers[offsets[si] + qi]?.score ?? null,
+        })),
+      }));
+
       const { error } = await getSupabase()
         .from("evaluation_results")
         .insert({
@@ -44,16 +78,12 @@ export default function Results() {
           evaluator_name: selectedEvaluator?.name || "",
           total_score: totalScore,
           average_score: Number(averageScore),
-          answers: selectedChecklist.questions.map((question, index) => ({
-            question,
-            score: answers[index]?.score ?? null,
-            comment: answers[index]?.comment ?? "",
-          })),
+          answers: sectionedAnswers,
         });
 
       if (error) throw error;
 
-      // Google Sheets — fire-and-forget, ошибки не блокируют
+      // Google Sheets sync (fire-and-forget)
       fetch(
         "https://script.google.com/macros/s/AKfycbzCEPf-2tm_p7rz6hkGvaFa93OQX26uVDvYKVexkvrFzFewLqM06jcu3iodme5VQff72g/exec",
         {
@@ -67,7 +97,7 @@ export default function Results() {
             checklist_name: selectedChecklist.name,
             total_score: totalScore,
             average_score: Number(averageScore),
-            answers,
+            answers: sectionedAnswers,
           }),
         }
       ).catch((e) => console.error("Sheets sync:", e));
@@ -75,7 +105,11 @@ export default function Results() {
       setSaved(true);
       toast({ title: "Сохранено ✓", description: "Оценка записана в базу данных." });
     } catch (err: unknown) {
-      toast({ title: "Ошибка", description: err instanceof Error ? err.message : "Неизвестная ошибка", variant: "destructive" });
+      toast({
+        title: "Ошибка",
+        description: err instanceof Error ? err.message : "Неизвестная ошибка",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
@@ -94,7 +128,6 @@ export default function Results() {
         className="px-5 pt-16 pb-8 flex flex-col items-center text-center"
         style={{ background: `linear-gradient(180deg, ${accentColor}15 0%, transparent 100%)` }}
       >
-        {/* Circular progress */}
         <div className="relative w-36 h-36 mb-5">
           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
             <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth="7" />
@@ -111,7 +144,9 @@ export default function Results() {
             <span className="text-[36px] font-bold" style={{ color: accentColor, letterSpacing: "-1px" }}>
               {totalScore}
             </span>
-            <span className="text-[13px]" style={{ color: "rgba(60,60,67,0.5)" }}>/ {maxPossibleScore}</span>
+            <span className="text-[13px]" style={{ color: "rgba(60,60,67,0.5)" }}>
+              / {maxPossibleScore}
+            </span>
           </div>
         </div>
 
@@ -123,50 +158,93 @@ export default function Results() {
         </div>
 
         <div className="mt-4">
-          <div className="text-[20px] font-bold" style={{ color: "#000" }}>{selectedEmployee.name}</div>
-          <div className="text-[15px] mt-0.5" style={{ color: "rgba(60,60,67,0.6)" }}>{selectedEmployee.role}</div>
+          <div className="text-[20px] font-bold" style={{ color: "#000" }}>
+            {selectedEmployee.name}
+          </div>
+          <div className="text-[15px] mt-0.5" style={{ color: "rgba(60,60,67,0.6)" }}>
+            {selectedEmployee.role}
+          </div>
         </div>
       </div>
 
-      {/* Breakdown */}
+      {/* Breakdown by sections */}
       <div className="px-4 space-y-4">
         <p className="text-[13px] font-semibold px-1" style={{ color: "rgba(60,60,67,0.6)" }}>
           ОТВЕТЫ
         </p>
-        <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          {selectedChecklist.questions.map((question, idx) => {
-            const answer = answers[idx];
-            const score = answer?.score ?? null;
-            const color = score !== null ? SCORE_COLORS[score] : "rgba(60,60,67,0.3)";
-            return (
-              <div
-                key={idx}
-                className="flex items-start gap-3 px-4 py-3.5"
-                style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
-              >
+
+        {sections.map((section, si) => (
+          <div
+            key={section.id}
+            className="rounded-[20px] overflow-hidden"
+            style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+          >
+            {/* Section title */}
+            <div
+              className="px-4 py-2.5"
+              style={{
+                background: "rgba(0,122,255,0.05)",
+                borderBottom: "0.5px solid rgba(60,60,67,0.12)",
+              }}
+            >
+              <p className="text-[13px] font-semibold" style={{ color: "#007AFF" }}>
+                {section.title}
+              </p>
+            </div>
+
+            {/* Questions */}
+            {section.questions.map((question, qi) => {
+              const idx = offsets[si] + qi;
+              const answer = answers[idx];
+              const score = answer?.score ?? null;
+              const color = score !== null ? SCORE_COLORS[score] : "rgba(60,60,67,0.3)";
+              return (
                 <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[14px] font-bold"
-                  style={{ background: score !== null ? `${color}18` : "rgba(60,60,67,0.08)", color }}
+                  key={idx}
+                  className="flex items-start gap-3 px-4 py-3.5"
+                  style={{ borderBottom: "0.5px solid rgba(60,60,67,0.08)" }}
                 >
-                  {score ?? "—"}
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[14px] font-bold"
+                    style={{
+                      background: score !== null ? `${color}18` : "rgba(60,60,67,0.08)",
+                      color,
+                    }}
+                  >
+                    {score ?? "—"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] leading-snug" style={{ color: "#000" }}>
+                      {question}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] leading-snug" style={{ color: "#000" }}>{question}</p>
-                  {answer?.comment && (
-                    <p className="mt-1 text-[13px] italic" style={{ color: "rgba(60,60,67,0.6)" }}>«{answer.comment}»</p>
-                  )}
-                </div>
+              );
+            })}
+
+            {/* Section comment */}
+            {sectionComments[section.id] && (
+              <div
+                className="px-4 py-3"
+                style={{ borderTop: "0.5px solid rgba(60,60,67,0.08)" }}
+              >
+                <p className="text-[11px] font-semibold mb-1" style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.3px" }}>
+                  КОММЕНТАРИЙ К БЛОКУ
+                </p>
+                <p className="text-[14px] italic" style={{ color: "rgba(60,60,67,0.7)" }}>
+                  «{sectionComments[section.id]}»
+                </p>
               </div>
-            );
-          })}
-        </div>
+            )}
+          </div>
+        ))}
 
         {/* Actions */}
         <motion.button
           whileTap={!saving && !saved ? { scale: 0.97 } : {}}
           onClick={handleSave}
           disabled={saving || saved}
-          className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2 overflow-hidden relative"
+          className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2 overflow-hidden"
           style={{
             background: saved ? "#34C759" : "#007AFF",
             color: "#fff",
@@ -179,35 +257,17 @@ export default function Results() {
         >
           <AnimatePresence mode="wait" initial={false}>
             {saving && (
-              <motion.span
-                key="loading"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="flex items-center gap-2"
-              >
+              <motion.span key="loading" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="flex items-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin" /> Сохранение...
               </motion.span>
             )}
             {!saving && saved && (
-              <motion.span
-                key="saved"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-2"
-              >
+              <motion.span key="saved" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
                 <Check className="h-5 w-5" /> Сохранено
               </motion.span>
             )}
             {!saving && !saved && (
-              <motion.span
-                key="idle"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="flex items-center gap-2"
-              >
+              <motion.span key="idle" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="flex items-center gap-2">
                 <Check className="h-5 w-5" /> Сохранить оценку
               </motion.span>
             )}

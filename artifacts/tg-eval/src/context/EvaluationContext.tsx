@@ -13,10 +13,12 @@ interface EvaluationContextType {
   setSelectedEmployee: (employee: Employee | null) => void;
   selectedEvaluator: Employee | null;
   setSelectedEvaluator: (employee: Employee | null) => void;
+  /** answers[globalQuestionIndex] = { score, comment } */
   answers: Record<number, Answer>;
   setAnswer: (questionIndex: number, answer: Answer) => void;
-  currentQuestionIndex: number;
-  setCurrentQuestionIndex: (index: number) => void;
+  /** sectionComments[sectionId] = commentText */
+  sectionComments: Record<string, string>;
+  setSectionComment: (sectionId: string, comment: string) => void;
   reset: () => void;
 }
 
@@ -27,10 +29,14 @@ export function EvaluationProvider({ children }: { children: ReactNode }) {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedEvaluator, setSelectedEvaluator] = useState<Employee | null>(null);
   const [answers, setAnswers] = useState<Record<number, Answer>>({});
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [sectionComments, setSectionComments] = useState<Record<string, string>>({});
 
   const setAnswer = useCallback((questionIndex: number, answer: Answer) => {
     setAnswers((prev) => ({ ...prev, [questionIndex]: answer }));
+  }, []);
+
+  const setSectionComment = useCallback((sectionId: string, comment: string) => {
+    setSectionComments((prev) => ({ ...prev, [sectionId]: comment }));
   }, []);
 
   const reset = useCallback(() => {
@@ -38,7 +44,7 @@ export function EvaluationProvider({ children }: { children: ReactNode }) {
     setSelectedEmployee(null);
     setSelectedEvaluator(null);
     setAnswers({});
-    setCurrentQuestionIndex(0);
+    setSectionComments({});
   }, []);
 
   return (
@@ -52,8 +58,8 @@ export function EvaluationProvider({ children }: { children: ReactNode }) {
         setSelectedEvaluator,
         answers,
         setAnswer,
-        currentQuestionIndex,
-        setCurrentQuestionIndex,
+        sectionComments,
+        setSectionComment,
         reset,
       }}
     >

@@ -1,23 +1,31 @@
 import { useState, useEffect } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { Checklist } from "@/data/mockData";
+import { Checklist, ChecklistSection } from "@/data/mockData";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapToChecklist(row: any): Checklist {
-  const sections = [...(row.checklist_sections || [])].sort(
+type DbQuestion = { id: number; question_text: string; sort_order: number };
+type DbSection = { id: number; title: string; sort_order: number; checklist_questions: DbQuestion[] };
+type DbChecklistWithNested = { id: number; name: string; checklist_sections: DbSection[] };
+
+function mapToChecklist(row: DbChecklistWithNested): Checklist {
+  const sortedSections = [...(row.checklist_sections || [])].sort(
     (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
   );
 
-  const questions = sections.flatMap((section) =>
-    [...(section.checklist_questions || [])]
+  const sections: ChecklistSection[] = sortedSections.map((sec) => ({
+    id: String(sec.id),
+    title: sec.title,
+    questions: [...(sec.checklist_questions || [])]
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .map((q) => q.question_text)
-  );
+      .map((q) => q.question_text),
+  }));
+
+  const questions = sections.flatMap((s) => s.questions);
 
   return {
     id: String(row.id),
     name: row.name,
     category: "Evaluation",
+    sections,
     questions,
   };
 }
@@ -34,13 +42,8 @@ export function useChecklists() {
       try {
         const { data, error: sbError } = await getSupabase()
           .from("checklists")
-          .select(
-            `*, checklist_sections(*, checklist_questions(*))`
-          )
+          .select("*, checklist_sections(*, checklist_questions(*))")
           .order("id");
-
-        console.log("CHECKLISTS:", data);
-        console.log("ERROR:", sbError);
 
         if (sbError) {
           setError(sbError.message);
