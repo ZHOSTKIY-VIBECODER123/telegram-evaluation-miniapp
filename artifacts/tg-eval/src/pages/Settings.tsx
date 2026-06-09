@@ -425,7 +425,7 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
                 {cl.checklist_sections.sort((a, b) => a.sort_order - b.sort_order).map((sec) => (
                   <div key={sec.id} className="px-4 py-3">
                     <p className="text-[12px] font-semibold mb-2" style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.5px" }}>
-                      {sec.title.toUpperCase()}
+                      {(sec.title ?? "Раздел").toUpperCase()}
                     </p>
                     <div className="space-y-0">
                       {sec.checklist_questions.sort((a, b) => a.sort_order - b.sort_order).map((q, qi) => (

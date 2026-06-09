@@ -13,7 +13,7 @@ function mapToChecklist(row: DbChecklistWithNested): Checklist {
 
   const sections: ChecklistSection[] = sortedSections.map((sec) => ({
     id: String(sec.id),
-    title: sec.title,
+    title: sec.title ?? "Раздел",
     questions: [...(sec.checklist_questions || [])]
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
       .map((q) => q.question_text),
