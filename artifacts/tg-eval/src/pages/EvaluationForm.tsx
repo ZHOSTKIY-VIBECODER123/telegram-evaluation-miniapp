@@ -46,6 +46,9 @@ export default function EvaluationForm() {
   const answered = Object.values(answers).filter((a) => a.score !== null).length;
   const allAnswered = total > 0 && answered === total;
   const progress = total > 0 ? answered / total : 0;
+  // Комментарий к каждому блоку обязателен
+  const commentsFilled = sections.every((sec) => (sectionComments[sec.id] || "").trim().length > 0);
+  const canFinish = allAnswered && commentsFilled;
 
   return (
     <div className="max-w-[430px] mx-auto min-h-[100dvh] flex flex-col" style={{ background: "hsl(240 5% 96%)" }}>
@@ -149,13 +152,13 @@ export default function EvaluationForm() {
                 );
               })}
 
-              {/* Block comment */}
+              {/* Block comment (обязательный) */}
               <div className="px-4 pt-3 pb-4">
                 <p
                   className="text-[11px] font-semibold mb-2"
                   style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.4px" }}
                 >
-                  КОММЕНТАРИЙ К БЛОКУ
+                  КОММЕНТАРИЙ ПО БЛОКУ <span style={{ color: "#FF3B30" }}>*</span>
                 </p>
                 <textarea
                   className="w-full px-3 py-2.5 rounded-[12px] text-[14px] resize-none outline-none"
@@ -164,7 +167,7 @@ export default function EvaluationForm() {
                     color: "#000",
                     minHeight: 68,
                   }}
-                  placeholder="Необязательно..."
+                  placeholder="Комментарий по блоку..."
                   value={sectionComments[section.id] || ""}
                   onChange={(e) => setSectionComment(section.id, e.target.value)}
                   rows={3}
@@ -185,19 +188,27 @@ export default function EvaluationForm() {
         }}
       >
         <motion.button
-          whileTap={allAnswered ? { scale: 0.97 } : {}}
-          disabled={!allAnswered}
+          whileTap={canFinish ? { scale: 0.97 } : {}}
+          disabled={!canFinish}
           onClick={() => setLocation("/results")}
           className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
           style={{
-            background: allAnswered ? "#007AFF" : "rgba(0,122,255,0.3)",
+            background: canFinish ? "#007AFF" : "rgba(0,122,255,0.3)",
             color: "#fff",
-            boxShadow: allAnswered ? "0 4px 16px rgba(0,122,255,0.4)" : "none",
+            boxShadow: canFinish ? "0 4px 16px rgba(0,122,255,0.4)" : "none",
           }}
           data-testid="button-finish"
         >
-          <Check className="h-5 w-5" />
-          Завершить
+          {!allAnswered ? (
+            "Ответьте на все вопросы"
+          ) : !commentsFilled ? (
+            "Заполните комментарии к блокам"
+          ) : (
+            <>
+              <Check className="h-5 w-5" />
+              Завершить
+            </>
+          )}
         </motion.button>
       </div>
     </div>
