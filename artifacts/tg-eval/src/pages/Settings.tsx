@@ -1,8 +1,20 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, X, Check } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, ChevronDown,
+  ArrowUp, ArrowDown, X, Check, Link2,
+} from "lucide-react";
+
+/* ─── Справочник ролей ───────────────────────────── */
+const ROLES = [
+  "Руководитель отдела по привлечению и Бизнес Поддержки",
+  "Руководитель отдела по привлечению",
+  "Team Leader",
+  "Менеджер по привлечению партнеров",
+] as const;
+const ADMIN_ROLE = ROLES[0];
 
 type Employee = {
   id: number;
@@ -10,10 +22,11 @@ type Employee = {
   role: string;
   can_evaluate: boolean;
   active: boolean;
+  telegram_id?: number | null;
 };
 
 type Question = { id: number; question_text: string; sort_order: number };
-type Section = { id: number; title: string; sort_order: number; checklist_questions: Question[] };
+type Section = { id: number; title: string | null; sort_order: number; checklist_questions: Question[] };
 type Checklist = { id: number; name: string; checklist_sections: Section[] };
 
 const TABS = [
@@ -23,13 +36,40 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
+const getTgId = (): number | undefined =>
+  (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id;
+
 export default function Settings() {
   const [tab, setTab] = useState<TabKey>("employees");
   const { toast } = useToast();
 
+  // Сотрудники загружаются здесь, т.к. от них зависят права доступа всех вкладок
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [empLoading, setEmpLoading] = useState(true);
+
+  const loadEmployees = useCallback(async () => {
+    const { data, error } = await getSupabase().from("employees").select("*").order("full_name");
+    if (error) {
+      toast({ title: "Ошибка загрузки", description: error.message, variant: "destructive" });
+    } else {
+      setEmployees(data || []);
+    }
+    setEmpLoading(false);
+  }, [toast]);
+
+  useEffect(() => { loadEmployees(); }, [loadEmployees]);
+
+  /* Права доступа:
+     - если ни один сотрудник не привязан к Telegram → bootstrap-режим (доступ всем)
+     - иначе админ = активный сотрудник с ролью ADMIN_ROLE, чей telegram_id совпадает с текущим */
+  const tgId = getTgId();
+  const anyLinked = employees.some((e) => e.telegram_id != null);
+  const me = tgId != null ? employees.find((e) => Number(e.telegram_id) === Number(tgId)) : undefined;
+  const bootstrap = !empLoading && !anyLinked;
+  const isAdmin = empLoading ? false : bootstrap || (me?.role === ADMIN_ROLE && me.active);
+
   return (
     <div className="max-w-[430px] mx-auto min-h-[100dvh]">
-      {/* Header */}
       <header className="px-5 pt-14 pb-4">
         <h1 className="text-[34px] font-bold" style={{ color: "#000", letterSpacing: "-0.5px" }}>
           Настройки
@@ -37,7 +77,6 @@ export default function Settings() {
       </header>
 
       <div className="px-4 space-y-4 pb-32">
-        {/* Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {TABS.map(({ key, label }) => (
             <button
@@ -54,8 +93,18 @@ export default function Settings() {
           ))}
         </div>
 
-        {tab === "employees" && <EmployeesTab toast={toast} />}
-        {tab === "checklists" && <ChecklistsTab toast={toast} />}
+        {tab === "employees" && (
+          <EmployeesTab
+            toast={toast}
+            employees={employees}
+            loading={empLoading}
+            onReload={loadEmployees}
+            isAdmin={isAdmin}
+            bootstrap={bootstrap}
+            tgId={tgId}
+          />
+        )}
+        {tab === "checklists" && <ChecklistsTab toast={toast} isAdmin={isAdmin} />}
         {tab === "roles" && <RolesTab />}
       </div>
     </div>
@@ -63,58 +112,111 @@ export default function Settings() {
 }
 
 /* ─── EMPLOYEES TAB ──────────────────────────────── */
-function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
+function EmployeesTab({
+  toast, employees, loading, onReload, isAdmin, bootstrap, tgId,
+}: {
+  toast: ReturnType<typeof useToast>["toast"];
+  employees: Employee[];
+  loading: boolean;
+  onReload: () => void;
+  isAdmin: boolean;
+  bootstrap: boolean;
+  tgId?: number;
+}) {
   const [editTarget, setEditTarget] = useState<Employee | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ full_name: "", role: "", can_evaluate: false });
-
-  const load = async () => {
-    setLoading(true);
-    const { data } = await getSupabase().from("employees").select("*").order("full_name");
-    setEmployees(data || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
+  // Новый сотрудник по умолчанию может оценивать — чтобы сразу появлялся в списке оценщиков
+  const [form, setForm] = useState({ full_name: "", role: "", can_evaluate: true });
 
   const saveNew = async () => {
-    if (!form.full_name.trim() || !form.role.trim()) return;
+    if (!form.full_name.trim() || !form.role) {
+      toast({ title: "Заполните имя и выберите роль", variant: "destructive" });
+      return;
+    }
     const { error } = await getSupabase().from("employees").insert({
       full_name: form.full_name.trim(),
-      role: form.role.trim(),
+      role: form.role,
       can_evaluate: form.can_evaluate,
       active: true,
     });
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Сотрудник добавлен ✓" });
     setShowAdd(false);
-    setForm({ full_name: "", role: "", can_evaluate: false });
-    load();
+    setForm({ full_name: "", role: "", can_evaluate: true });
+    onReload();
   };
 
   const saveEdit = async () => {
     if (!editTarget) return;
-    if (!editTarget.full_name.trim() || !editTarget.role.trim()) {
+    const newName = editTarget.full_name.trim();
+    if (!newName || !editTarget.role.trim()) {
       toast({ title: "Заполните имя и роль", variant: "destructive" });
       return;
     }
+    const orig = employees.find((e) => e.id === editTarget.id);
     const { error } = await getSupabase().from("employees").update({
-      full_name: editTarget.full_name.trim(),
-      role: editTarget.role.trim(),
+      full_name: newName,
+      role: editTarget.role,
       can_evaluate: editTarget.can_evaluate,
     }).eq("id", editTarget.id);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
+
+    // Каскад: при смене ФИО переименовываем сотрудника во всех старых оценках,
+    // чтобы история и аналитика не «потеряли» его
+    if (orig && orig.full_name !== newName) {
+      const sb = getSupabase();
+      const [r1, r2] = await Promise.all([
+        sb.from("evaluation_results").update({ employee_name: newName }).eq("employee_name", orig.full_name),
+        sb.from("evaluation_results").update({ evaluator_name: newName }).eq("evaluator_name", orig.full_name),
+      ]);
+      if (r1.error || r2.error) {
+        toast({
+          title: "Имя обновлено, но есть проблема",
+          description: "Не все старые оценки удалось переименовать",
+          variant: "destructive",
+        });
+      }
+    }
+
     toast({ title: "Сохранено ✓" });
     setEditTarget(null);
-    load();
+    onReload();
   };
 
   const toggleActive = async (emp: Employee) => {
     const { error } = await getSupabase().from("employees").update({ active: !emp.active }).eq("id", emp.id);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
-    load();
+    onReload();
+  };
+
+  const deleteEmployee = async () => {
+    if (!editTarget) return;
+    const { error } = await getSupabase().from("employees").delete().eq("id", editTarget.id);
+    if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Сотрудник удалён" });
+    setEditTarget(null);
+    setConfirmDelete(false);
+    onReload();
+  };
+
+  const linkTelegram = async () => {
+    if (!editTarget || tgId == null) return;
+    const sb = getSupabase();
+    // Один Telegram — один сотрудник: снимаем привязку с остальных
+    await sb.from("employees").update({ telegram_id: null }).eq("telegram_id", tgId);
+    const { error } = await sb.from("employees").update({ telegram_id: tgId }).eq("id", editTarget.id);
+    if (error) {
+      toast({
+        title: "Ошибка привязки",
+        description: `${error.message}. Возможно, в таблице employees нет колонки telegram_id.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Telegram привязан ✓" });
+    setEditTarget({ ...editTarget, telegram_id: tgId });
+    onReload();
   };
 
   const activeEmps = employees.filter((e) => e.active);
@@ -130,7 +232,13 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
 
   return (
     <div className="space-y-4">
-      {/* Add button */}
+      {bootstrap && (
+        <div className="rounded-2xl p-4 text-[13px] leading-snug" style={{ background: "rgba(255,149,0,0.12)", color: "#B36B00" }}>
+          Права администратора не настроены — доступ открыт всем. Чтобы ограничить доступ:
+          откройте карточку сотрудника с ролью «{ADMIN_ROLE}» из Telegram и нажмите «Привязать мой Telegram».
+        </div>
+      )}
+
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={() => setShowAdd(true)}
@@ -160,11 +268,16 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
                   {emp.full_name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[15px] font-medium truncate" style={{ color: "#000" }}>{emp.full_name}</div>
+                  <div className="text-[15px] font-medium truncate flex items-center gap-1.5" style={{ color: "#000" }}>
+                    {emp.full_name}
+                    {emp.telegram_id != null && (
+                      <Link2 className="h-3 w-3 flex-shrink-0" style={{ color: "#34C759" }} />
+                    )}
+                  </div>
                   <div className="text-[13px] flex items-center gap-2" style={{ color: "rgba(60,60,67,0.5)" }}>
-                    {emp.role}
+                    <span className="truncate">{emp.role}</span>
                     {emp.can_evaluate && (
-                      <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}>
                         Оценщик
                       </span>
                     )}
@@ -172,7 +285,7 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
                 </div>
                 <div className="flex gap-1">
                   <button
-                    onClick={() => setEditTarget({ ...emp })}
+                    onClick={() => { setEditTarget({ ...emp }); setConfirmDelete(false); }}
                     className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
                     style={{ background: "rgba(60,60,67,0.08)" }}
                   >
@@ -181,9 +294,10 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
                   <button
                     onClick={() => toggleActive(emp)}
                     className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
-                    style={{ background: "rgba(255,59,48,0.1)" }}
+                    style={{ background: "rgba(255,149,0,0.12)" }}
+                    title="В архив"
                   >
-                    <Trash2 className="h-3.5 w-3.5" style={{ color: "#FF3B30" }} />
+                    <X className="h-3.5 w-3.5" style={{ color: "#FF9500" }} />
                   </button>
                 </div>
               </div>
@@ -219,6 +333,7 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
                   onClick={() => toggleActive(emp)}
                   className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
                   style={{ background: "rgba(52,199,89,0.1)" }}
+                  title="Вернуть из архива"
                 >
                   <Plus className="h-3.5 w-3.5" style={{ color: "#34C759" }} />
                 </button>
@@ -236,15 +351,14 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
               <input
                 className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none"
                 style={{ borderBottom: "0.5px solid rgba(60,60,67,0.12)" }}
-                placeholder="Имя"
+                placeholder="ФИО"
                 value={form.full_name}
                 onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
               />
-              <input
-                className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none"
-                placeholder="Роль"
+              <RoleSelect
                 value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+                onChange={(role) => setForm((f) => ({ ...f, role }))}
+                excludeAdmin={!isAdmin}
               />
             </div>
             <div
@@ -274,17 +388,21 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
               <input
                 className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none"
                 style={{ borderBottom: "0.5px solid rgba(60,60,67,0.12)" }}
-                placeholder="Имя"
+                placeholder="ФИО"
                 value={editTarget.full_name}
                 onChange={(e) => setEditTarget((t) => t && ({ ...t, full_name: e.target.value }))}
               />
-              <input
-                className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none"
-                placeholder="Роль"
+              <RoleSelect
                 value={editTarget.role}
-                onChange={(e) => setEditTarget((t) => t && ({ ...t, role: e.target.value }))}
+                onChange={(role) => setEditTarget((t) => t && ({ ...t, role }))}
+                disabled={!isAdmin}
               />
             </div>
+            {!isAdmin && (
+              <p className="text-[12px] px-1 mt-1.5" style={{ color: "rgba(60,60,67,0.45)" }}>
+                Роль может менять только «{ADMIN_ROLE}»
+              </p>
+            )}
             <div
               className="flex items-center justify-between px-4 py-3.5 rounded-[16px] mt-3"
               style={{ background: "rgba(118,118,128,0.08)" }}
@@ -295,6 +413,28 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
                 onChange={(v) => setEditTarget((t) => t && ({ ...t, can_evaluate: v }))}
               />
             </div>
+
+            {/* Привязка Telegram (для прав администратора) */}
+            {isAdmin && tgId != null && (
+              Number(editTarget.telegram_id) === Number(tgId) ? (
+                <div
+                  className="flex items-center justify-center gap-2 px-4 py-3.5 rounded-[16px] mt-3 text-[15px] font-medium"
+                  style={{ background: "rgba(52,199,89,0.1)", color: "#34C759" }}
+                >
+                  <Link2 className="h-4 w-4" /> Telegram привязан
+                </div>
+              ) : (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={linkTelegram}
+                  className="w-full px-4 py-3.5 rounded-[16px] mt-3 text-[15px] font-medium flex items-center justify-center gap-2"
+                  style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}
+                >
+                  <Link2 className="h-4 w-4" /> Привязать мой Telegram
+                </motion.button>
+              )
+            )}
+
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={saveEdit}
@@ -303,6 +443,22 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
             >
               <Check className="h-5 w-5" /> Сохранить
             </motion.button>
+
+            {/* Удаление — только администратор, с подтверждением */}
+            {isAdmin && (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => (confirmDelete ? deleteEmployee() : setConfirmDelete(true))}
+                className="w-full h-[48px] rounded-[16px] text-[16px] font-semibold mt-3 flex items-center justify-center gap-2"
+                style={{
+                  background: confirmDelete ? "#FF3B30" : "rgba(255,59,48,0.1)",
+                  color: confirmDelete ? "#fff" : "#FF3B30",
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                {confirmDelete ? "Точно удалить навсегда?" : "Удалить сотрудника"}
+              </motion.button>
+            )}
           </IosSheet>
         )}
       </AnimatePresence>
@@ -310,37 +466,75 @@ function EmployeesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }
   );
 }
 
-/* ─── CHECKLISTS TAB ─────────────────────────────── */
-function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+/* ─── Селект роли из справочника ─────────────────── */
+function RoleSelect({
+  value, onChange, disabled, excludeAdmin,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  excludeAdmin?: boolean;
+}) {
+  const options: string[] = excludeAdmin ? ROLES.filter((r) => r !== ADMIN_ROLE) : [...ROLES];
+  // Старые роли вне справочника не теряем — показываем как опцию
+  if (value && !options.includes(value)) options.unshift(value);
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className="w-full px-4 py-3.5 text-[16px] bg-transparent outline-none appearance-none"
+      style={{ color: value ? "#000" : "rgba(60,60,67,0.4)", opacity: disabled ? 0.5 : 1 }}
+    >
+      <option value="">Выберите роль...</option>
+      {options.map((r) => (
+        <option key={r} value={r}>{r}</option>
+      ))}
+    </select>
+  );
+}
+
+/* ─── CHECKLISTS TAB (конструктор) ───────────────── */
+function ChecklistsTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["toast"]; isAdmin: boolean }) {
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [newName, setNewName] = useState("");
+
   const [showAddChecklist, setShowAddChecklist] = useState(false);
-  // Вопрос добавляется через IosSheet, а не inline (клавиатура на мобиле обрезала overflow:hidden)
+  const [newName, setNewName] = useState("");
+  // Все формы — в bottom sheet (клавиатура на мобиле обрезала inline-инпуты)
   const [addQuestionSheet, setAddQuestionSheet] = useState<{ sectionId: number; sectionTitle: string } | null>(null);
   const [newQuestion, setNewQuestion] = useState("");
+  const [editQuestionSheet, setEditQuestionSheet] = useState<{ questionId: number; text: string } | null>(null);
+  const [addSectionSheet, setAddSectionSheet] = useState<{ checklistId: number } | null>(null);
+  const [newSectionTitle, setNewSectionTitle] = useState("");
+  const [renameSectionSheet, setRenameSectionSheet] = useState<{ sectionId: number; title: string } | null>(null);
+  const [deleteSectionSheet, setDeleteSectionSheet] = useState<{ sectionId: number; title: string; count: number } | null>(null);
 
   const load = async () => {
-    setLoading(true);
-    const { data } = await getSupabase()
+    const { data, error } = await getSupabase()
       .from("checklists")
       .select("*, checklist_sections(*, checklist_questions(*))")
       .order("id");
-    setChecklists((data as Checklist[]) || []);
+    if (error) {
+      toast({ title: "Ошибка загрузки", description: error.message, variant: "destructive" });
+    } else {
+      setChecklists((data as Checklist[]) || []);
+    }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
+  /* ── Чек-листы ── */
   const addChecklist = async () => {
     if (!newName.trim()) return;
     const { data: cl, error } = await getSupabase().from("checklists").insert({ name: newName.trim() }).select().single();
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
-    const { error: secError } = await getSupabase().from("checklist_sections").insert({ checklist_id: cl.id, title: "Раздел 1", sort_order: 0 });
+    const { error: secError } = await getSupabase().from("checklist_sections").insert({ checklist_id: cl.id, title: "Блок 1", sort_order: 0 });
     if (secError) {
       await getSupabase().from("checklists").delete().eq("id", cl.id);
-      toast({ title: "Ошибка", description: "Не удалось создать раздел", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не удалось создать блок", variant: "destructive" });
       return;
     }
     setNewName("");
@@ -349,10 +543,72 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
     load();
   };
 
+  /* ── Блоки ── */
+  const addSection = async () => {
+    if (!addSectionSheet || !newSectionTitle.trim()) return;
+    const cl = checklists.find((c) => c.id === addSectionSheet.checklistId);
+    const maxOrder = cl && cl.checklist_sections.length > 0
+      ? Math.max(...cl.checklist_sections.map((s) => s.sort_order ?? 0))
+      : -1;
+    const { error } = await getSupabase().from("checklist_sections").insert({
+      checklist_id: addSectionSheet.checklistId,
+      title: newSectionTitle.trim(),
+      sort_order: maxOrder + 1,
+    });
+    if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
+    setNewSectionTitle("");
+    setAddSectionSheet(null);
+    toast({ title: "Блок добавлен ✓" });
+    load();
+  };
+
+  const renameSection = async () => {
+    if (!renameSectionSheet || !renameSectionSheet.title.trim()) return;
+    const { error } = await getSupabase()
+      .from("checklist_sections")
+      .update({ title: renameSectionSheet.title.trim() })
+      .eq("id", renameSectionSheet.sectionId);
+    if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
+    setRenameSectionSheet(null);
+    toast({ title: "Блок переименован ✓" });
+    load();
+  };
+
+  const deleteSection = async () => {
+    if (!deleteSectionSheet) return;
+    const sb = getSupabase();
+    // Сначала вопросы блока, затем сам блок
+    const delQ = await sb.from("checklist_questions").delete().eq("section_id", deleteSectionSheet.sectionId);
+    if (delQ.error) { toast({ title: "Ошибка", description: delQ.error.message, variant: "destructive" }); return; }
+    const delS = await sb.from("checklist_sections").delete().eq("id", deleteSectionSheet.sectionId);
+    if (delS.error) { toast({ title: "Ошибка", description: delS.error.message, variant: "destructive" }); return; }
+    setDeleteSectionSheet(null);
+    toast({ title: "Блок удалён" });
+    load();
+  };
+
+  const moveSection = async (cl: Checklist, index: number, dir: -1 | 1) => {
+    const secs = [...cl.checklist_sections].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const j = index + dir;
+    if (j < 0 || j >= secs.length) return;
+    [secs[index], secs[j]] = [secs[j], secs[index]];
+    const sb = getSupabase();
+    const results = await Promise.all(
+      secs.map((s, i) => sb.from("checklist_sections").update({ sort_order: i }).eq("id", s.id))
+    );
+    if (results.some((r) => r.error)) {
+      toast({ title: "Ошибка", description: "Не удалось изменить порядок", variant: "destructive" });
+    }
+    load();
+  };
+
+  /* ── Вопросы ── */
   const addQuestion = async () => {
     if (!addQuestionSheet || !newQuestion.trim()) return;
     const section = checklists.flatMap((c) => c.checklist_sections).find((s) => s.id === addQuestionSheet.sectionId);
-    const maxOrder = section ? Math.max(0, ...section.checklist_questions.map((q) => q.sort_order)) : 0;
+    const maxOrder = section && section.checklist_questions.length > 0
+      ? Math.max(...section.checklist_questions.map((q) => q.sort_order ?? 0))
+      : -1;
     const { error } = await getSupabase().from("checklist_questions").insert({
       section_id: addQuestionSheet.sectionId,
       question_text: newQuestion.trim(),
@@ -365,9 +621,36 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
     load();
   };
 
+  const saveQuestionEdit = async () => {
+    if (!editQuestionSheet || !editQuestionSheet.text.trim()) return;
+    const { error } = await getSupabase()
+      .from("checklist_questions")
+      .update({ question_text: editQuestionSheet.text.trim() })
+      .eq("id", editQuestionSheet.questionId);
+    if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
+    setEditQuestionSheet(null);
+    toast({ title: "Вопрос обновлён ✓" });
+    load();
+  };
+
   const deleteQuestion = async (questionId: number) => {
     const { error } = await getSupabase().from("checklist_questions").delete().eq("id", questionId);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
+    load();
+  };
+
+  const moveQuestion = async (sec: Section, index: number, dir: -1 | 1) => {
+    const qs = [...sec.checklist_questions].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const j = index + dir;
+    if (j < 0 || j >= qs.length) return;
+    [qs[index], qs[j]] = [qs[j], qs[index]];
+    const sb = getSupabase();
+    const results = await Promise.all(
+      qs.map((q, i) => sb.from("checklist_questions").update({ sort_order: i }).eq("id", q.id))
+    );
+    if (results.some((r) => r.error)) {
+      toast({ title: "Ошибка", description: "Не удалось изменить порядок", variant: "destructive" });
+    }
     load();
   };
 
@@ -381,95 +664,163 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
 
   return (
     <div className="space-y-4">
-      <motion.button
-        whileTap={{ scale: 0.97 }}
-        onClick={() => setShowAddChecklist(true)}
-        className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
-        style={{ background: "#007AFF", color: "#fff", boxShadow: "0 4px 16px rgba(0,122,255,0.3)" }}
-      >
-        <Plus className="h-5 w-5" /> Новый чек-лист
-      </motion.button>
-
-      {checklists.map((cl) => (
-        <div key={cl.id} className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          <button
-            className="w-full flex items-center gap-3 px-4 py-4"
-            onClick={() => setExpanded(expanded === cl.id ? null : cl.id)}
-          >
-            <div className="w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 text-lg">
-              📋
-            </div>
-            <div className="flex-1 text-left">
-              <div className="text-[15px] font-semibold" style={{ color: "#000" }}>{cl.name}</div>
-              <div className="text-[13px]" style={{ color: "rgba(60,60,67,0.5)" }}>
-                {cl.checklist_sections.reduce((sum, s) => sum + s.checklist_questions.length, 0)} вопросов
-              </div>
-            </div>
-            <motion.div
-              animate={{ rotate: expanded === cl.id ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ChevronDown className="h-4 w-4" style={{ color: "rgba(60,60,67,0.3)" }} />
-            </motion.div>
-          </button>
-
-          <AnimatePresence>
-            {expanded === cl.id && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
-                style={{ overflow: "hidden", borderTop: "0.5px solid rgba(60,60,67,0.12)" }}
-              >
-                {cl.checklist_sections.sort((a, b) => a.sort_order - b.sort_order).map((sec) => (
-                  <div key={sec.id} className="px-4 py-3">
-                    <p className="text-[12px] font-semibold mb-2" style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.5px" }}>
-                      {(sec.title ?? "Раздел").toUpperCase()}
-                    </p>
-                    <div className="space-y-0">
-                      {sec.checklist_questions.sort((a, b) => a.sort_order - b.sort_order).map((q, qi) => (
-                        <div
-                          key={q.id}
-                          className="flex items-start gap-2 py-2.5"
-                          style={{ borderTop: qi > 0 ? "0.5px solid rgba(60,60,67,0.08)" : "none" }}
-                        >
-                          <ChevronRight className="h-3 w-3 flex-shrink-0 mt-1" style={{ color: "rgba(60,60,67,0.25)" }} />
-                          <span className="flex-1 text-[14px] leading-snug" style={{ color: "#000" }}>{q.question_text}</span>
-                          <button
-                            onClick={() => deleteQuestion(q.id)}
-                            className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 active:opacity-60 mt-0.5"
-                            style={{ background: "rgba(255,59,48,0.1)" }}
-                          >
-                            <X className="h-3 w-3" style={{ color: "#FF3B30" }} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Кнопка открывает IosSheet вместо inline-input */}
-                    <button
-                      onClick={() => { setAddQuestionSheet({ sectionId: sec.id, sectionTitle: sec.title }); setNewQuestion(""); }}
-                      className="mt-3 flex items-center gap-1.5 text-[14px] active:opacity-60"
-                      style={{ color: "#007AFF" }}
-                    >
-                      <Plus className="h-3.5 w-3.5" /> Добавить вопрос
-                    </button>
-                  </div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+      {!isAdmin && (
+        <div className="rounded-2xl p-4 text-[13px] leading-snug" style={{ background: "rgba(0,122,255,0.08)", color: "#0A6CD6" }}>
+          Режим просмотра. Редактировать чек-листы может только «{ADMIN_ROLE}» (вход через Telegram).
         </div>
-      ))}
+      )}
+
+      {isAdmin && (
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={() => setShowAddChecklist(true)}
+          className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
+          style={{ background: "#007AFF", color: "#fff", boxShadow: "0 4px 16px rgba(0,122,255,0.3)" }}
+        >
+          <Plus className="h-5 w-5" /> Новый чек-лист
+        </motion.button>
+      )}
+
+      {checklists.map((cl) => {
+        const sortedSections = [...cl.checklist_sections].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        return (
+          <div key={cl.id} className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+            <button
+              className="w-full flex items-center gap-3 px-4 py-4"
+              onClick={() => setExpanded(expanded === cl.id ? null : cl.id)}
+            >
+              <div className="w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 text-lg">
+                📋
+              </div>
+              <div className="flex-1 text-left">
+                <div className="text-[15px] font-semibold" style={{ color: "#000" }}>{cl.name}</div>
+                <div className="text-[13px]" style={{ color: "rgba(60,60,67,0.5)" }}>
+                  {cl.checklist_sections.length} блоков · {cl.checklist_sections.reduce((sum, s) => sum + s.checklist_questions.length, 0)} вопросов
+                </div>
+              </div>
+              <motion.div
+                animate={{ rotate: expanded === cl.id ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ChevronDown className="h-4 w-4" style={{ color: "rgba(60,60,67,0.3)" }} />
+              </motion.div>
+            </button>
+
+            <AnimatePresence>
+              {expanded === cl.id && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  style={{ overflow: "hidden", borderTop: "0.5px solid rgba(60,60,67,0.12)" }}
+                >
+                  {sortedSections.map((sec, si) => {
+                    const sortedQuestions = [...sec.checklist_questions].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+                    return (
+                      <div key={sec.id} className="px-4 py-3" style={{ borderTop: si > 0 ? "0.5px solid rgba(60,60,67,0.08)" : "none" }}>
+                        {/* Заголовок блока + управление */}
+                        <div className="flex items-center gap-1 mb-2">
+                          <p className="flex-1 text-[12px] font-semibold min-w-0 truncate" style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.5px" }}>
+                            {(sec.title ?? "Блок").toUpperCase()}
+                          </p>
+                          {isAdmin && (
+                            <div className="flex gap-1 flex-shrink-0">
+                              <MiniBtn disabled={si === 0} onClick={() => moveSection(cl, si, -1)}>
+                                <ArrowUp className="h-3 w-3" />
+                              </MiniBtn>
+                              <MiniBtn disabled={si === sortedSections.length - 1} onClick={() => moveSection(cl, si, 1)}>
+                                <ArrowDown className="h-3 w-3" />
+                              </MiniBtn>
+                              <MiniBtn onClick={() => setRenameSectionSheet({ sectionId: sec.id, title: sec.title ?? "" })}>
+                                <Pencil className="h-3 w-3" />
+                              </MiniBtn>
+                              <MiniBtn
+                                danger
+                                onClick={() => setDeleteSectionSheet({ sectionId: sec.id, title: sec.title ?? "Блок", count: sec.checklist_questions.length })}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </MiniBtn>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Вопросы блока */}
+                        <div className="space-y-0">
+                          {sortedQuestions.map((q, qi) => (
+                            <div
+                              key={q.id}
+                              className="flex items-start gap-2 py-2.5"
+                              style={{ borderTop: qi > 0 ? "0.5px solid rgba(60,60,67,0.08)" : "none" }}
+                            >
+                              {isAdmin ? (
+                                <button
+                                  onClick={() => setEditQuestionSheet({ questionId: q.id, text: q.question_text })}
+                                  className="flex-1 min-w-0 text-left text-[14px] leading-snug active:opacity-60"
+                                  style={{ color: "#000" }}
+                                >
+                                  {q.question_text}
+                                </button>
+                              ) : (
+                                <span className="flex-1 min-w-0 text-[14px] leading-snug" style={{ color: "#000" }}>
+                                  {q.question_text}
+                                </span>
+                              )}
+                              {isAdmin && (
+                                <div className="flex gap-1 flex-shrink-0 mt-0.5">
+                                  <MiniBtn disabled={qi === 0} onClick={() => moveQuestion(sec, qi, -1)}>
+                                    <ArrowUp className="h-3 w-3" />
+                                  </MiniBtn>
+                                  <MiniBtn disabled={qi === sortedQuestions.length - 1} onClick={() => moveQuestion(sec, qi, 1)}>
+                                    <ArrowDown className="h-3 w-3" />
+                                  </MiniBtn>
+                                  <MiniBtn danger onClick={() => deleteQuestion(q.id)}>
+                                    <X className="h-3 w-3" />
+                                  </MiniBtn>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {sortedQuestions.length === 0 && (
+                            <p className="py-2 text-[13px]" style={{ color: "rgba(60,60,67,0.4)" }}>Нет вопросов</p>
+                          )}
+                        </div>
+
+                        {isAdmin && (
+                          <button
+                            onClick={() => { setAddQuestionSheet({ sectionId: sec.id, sectionTitle: sec.title ?? "Блок" }); setNewQuestion(""); }}
+                            className="mt-2 flex items-center gap-1.5 text-[14px] active:opacity-60"
+                            style={{ color: "#007AFF" }}
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Добавить вопрос
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {isAdmin && (
+                    <div className="px-4 pb-4 pt-1">
+                      <button
+                        onClick={() => { setAddSectionSheet({ checklistId: cl.id }); setNewSectionTitle(""); }}
+                        className="w-full py-2.5 rounded-[12px] text-[14px] font-medium flex items-center justify-center gap-1.5 active:opacity-60"
+                        style={{ background: "rgba(0,122,255,0.08)", color: "#007AFF" }}
+                      >
+                        <Plus className="h-4 w-4" /> Добавить блок
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
 
       {/* Sheet: добавить вопрос */}
       <AnimatePresence>
         {addQuestionSheet && (
-          <IosSheet
-            title={`Вопрос · ${addQuestionSheet.sectionTitle}`}
-            onClose={() => setAddQuestionSheet(null)}
-          >
+          <IosSheet title={`Вопрос · ${addQuestionSheet.sectionTitle}`} onClose={() => setAddQuestionSheet(null)}>
             <textarea
               className="w-full px-4 py-3.5 text-[16px] rounded-[16px] outline-none resize-none"
               style={{ background: "rgba(118,118,128,0.08)", color: "#000", minHeight: 100 }}
@@ -482,13 +833,108 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
               whileTap={{ scale: 0.97 }}
               onClick={addQuestion}
               className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold mt-3 flex items-center justify-center gap-2"
-              style={{
-                background: newQuestion.trim() ? "#007AFF" : "rgba(0,122,255,0.3)",
-                color: "#fff",
-              }}
+              style={{ background: newQuestion.trim() ? "#007AFF" : "rgba(0,122,255,0.3)", color: "#fff" }}
             >
               <Check className="h-5 w-5" /> Добавить
             </motion.button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Sheet: редактировать вопрос */}
+      <AnimatePresence>
+        {editQuestionSheet && (
+          <IosSheet title="Редактировать вопрос" onClose={() => setEditQuestionSheet(null)}>
+            <textarea
+              className="w-full px-4 py-3.5 text-[16px] rounded-[16px] outline-none resize-none"
+              style={{ background: "rgba(118,118,128,0.08)", color: "#000", minHeight: 100 }}
+              placeholder="Текст вопроса..."
+              value={editQuestionSheet.text}
+              onChange={(e) => setEditQuestionSheet((s) => s && ({ ...s, text: e.target.value }))}
+              autoFocus
+            />
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={saveQuestionEdit}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold mt-3 flex items-center justify-center gap-2"
+              style={{ background: editQuestionSheet.text.trim() ? "#007AFF" : "rgba(0,122,255,0.3)", color: "#fff" }}
+            >
+              <Check className="h-5 w-5" /> Сохранить
+            </motion.button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Sheet: добавить блок */}
+      <AnimatePresence>
+        {addSectionSheet && (
+          <IosSheet title="Новый блок" onClose={() => setAddSectionSheet(null)}>
+            <input
+              className="w-full px-4 py-3.5 text-[16px] rounded-[16px] outline-none"
+              style={{ background: "rgba(118,118,128,0.08)" }}
+              placeholder="Название блока (например: 1. Подготовка)"
+              value={newSectionTitle}
+              onChange={(e) => setNewSectionTitle(e.target.value)}
+              autoFocus
+            />
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={addSection}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold mt-4 flex items-center justify-center gap-2"
+              style={{ background: newSectionTitle.trim() ? "#007AFF" : "rgba(0,122,255,0.3)", color: "#fff" }}
+            >
+              <Plus className="h-5 w-5" /> Добавить
+            </motion.button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Sheet: переименовать блок */}
+      <AnimatePresence>
+        {renameSectionSheet && (
+          <IosSheet title="Название блока" onClose={() => setRenameSectionSheet(null)}>
+            <input
+              className="w-full px-4 py-3.5 text-[16px] rounded-[16px] outline-none"
+              style={{ background: "rgba(118,118,128,0.08)" }}
+              placeholder="Название блока"
+              value={renameSectionSheet.title}
+              onChange={(e) => setRenameSectionSheet((s) => s && ({ ...s, title: e.target.value }))}
+              autoFocus
+            />
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={renameSection}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold mt-4 flex items-center justify-center gap-2"
+              style={{ background: renameSectionSheet.title.trim() ? "#007AFF" : "rgba(0,122,255,0.3)", color: "#fff" }}
+            >
+              <Check className="h-5 w-5" /> Сохранить
+            </motion.button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Sheet: удалить блок */}
+      <AnimatePresence>
+        {deleteSectionSheet && (
+          <IosSheet title="Удалить блок?" onClose={() => setDeleteSectionSheet(null)}>
+            <p className="text-[15px] px-1 mb-4" style={{ color: "rgba(60,60,67,0.7)" }}>
+              «{deleteSectionSheet.title}» и {deleteSectionSheet.count} вопрос(ов) будут удалены безвозвратно.
+            </p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={deleteSection}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
+              style={{ background: "#FF3B30", color: "#fff" }}
+            >
+              <Trash2 className="h-5 w-5" /> Удалить блок
+            </motion.button>
+            <button
+              onClick={() => setDeleteSectionSheet(null)}
+              className="w-full h-[48px] rounded-[16px] text-[16px] font-semibold mt-3"
+              style={{ background: "rgba(118,118,128,0.12)", color: "#007AFF" }}
+            >
+              Отмена
+            </button>
           </IosSheet>
         )}
       </AnimatePresence>
@@ -520,16 +966,35 @@ function ChecklistsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] 
   );
 }
 
+/* ─── Мини-кнопка управления (порядок/правка/удаление) ── */
+function MiniBtn({
+  children, onClick, disabled, danger,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-6 h-6 rounded-full flex items-center justify-center active:opacity-60"
+      style={{
+        background: danger ? "rgba(255,59,48,0.1)" : "rgba(60,60,67,0.08)",
+        color: danger ? "#FF3B30" : "rgba(60,60,67,0.55)",
+        opacity: disabled ? 0.3 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 /* ─── ROLES TAB ──────────────────────────────────── */
 function RolesTab() {
-  const matrix = [
-    { from: "Team Leader", to: "Менеджер по привлечению партнеров" },
-    { from: "Руководитель отдела", to: "Team Leader" },
-    { from: "Бизнес Поддержка", to: "Руководитель отдела" },
-  ];
-
   const info = [
-    { label: "Версия", value: "1.1.0" },
+    { label: "Версия", value: "1.2.0" },
     { label: "База данных", value: "Supabase" },
     { label: "Платформа", value: "Telegram Mini App" },
   ];
@@ -538,23 +1003,27 @@ function RolesTab() {
     <div className="space-y-4">
       <div>
         <p className="text-[13px] font-semibold px-1 mb-2" style={{ color: "rgba(60,60,67,0.6)" }}>
-          КТО ОЦЕНИВАЕТ КОГО
+          СПРАВОЧНИК РОЛЕЙ
         </p>
         <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          {matrix.map(({ from, to }, idx) => (
+          {ROLES.map((role, idx) => (
             <div
-              key={idx}
+              key={role}
               className="flex items-center gap-2 px-4 py-3.5"
               style={{ borderTop: idx > 0 ? "0.5px solid rgba(60,60,67,0.12)" : "none" }}
             >
-              <span className="text-[14px] font-medium flex-1" style={{ color: "#000" }}>{from}</span>
-              <span className="text-[13px] px-2" style={{ color: "rgba(60,60,67,0.4)" }}>→</span>
-              <span className="text-[14px] flex-1 text-right" style={{ color: "rgba(60,60,67,0.7)" }}>{to}</span>
+              <span className="text-[14px] font-medium flex-1 leading-snug" style={{ color: "#000" }}>{role}</span>
+              {role === ADMIN_ROLE && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}>
+                  Администратор
+                </span>
+              )}
             </div>
           ))}
         </div>
-        <p className="text-[12px] px-1 mt-2" style={{ color: "rgba(60,60,67,0.45)" }}>
-          Изменение схемы требует правки кода разработчиком.
+        <p className="text-[12px] px-1 mt-2 leading-snug" style={{ color: "rgba(60,60,67,0.45)" }}>
+          Администратор может менять роли сотрудников, удалять сотрудников и редактировать чек-листы.
+          Права определяются по привязке Telegram в карточке сотрудника.
         </p>
       </div>
 
