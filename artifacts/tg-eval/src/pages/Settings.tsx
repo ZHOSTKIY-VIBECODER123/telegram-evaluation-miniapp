@@ -68,6 +68,7 @@ export default function Settings() {
 
 /* ─── EMPLOYEES TAB ──────────────────────────────── */
 function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["toast"]; isAdmin: boolean }) {
+  const { currentUser, logout } = useCurrentUser();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [editTarget, setEditTarget] = useState<Employee | null>(null);
@@ -151,11 +152,14 @@ function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["
 
   const deleteEmployee = async () => {
     if (!editTarget) return;
+    const deletingSelf = String(editTarget.id) === currentUser?.id;
     const { error } = await getSupabase().from("employees").delete().eq("id", editTarget.id);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Сотрудник удалён" });
     setEditTarget(null);
     setConfirmDelete(false);
+    // Удалил сам себя → немедленно выходим, требуется повторная авторизация
+    if (deletingSelf) { logout(); return; }
     load();
   };
 
