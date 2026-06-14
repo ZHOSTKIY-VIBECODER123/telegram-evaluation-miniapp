@@ -73,6 +73,8 @@ function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["
   const [loading, setLoading] = useState(true);
   const [editTarget, setEditTarget] = useState<Employee | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [archiveDeleteTarget, setArchiveDeleteTarget] = useState<Employee | null>(null);
+  const [confirmClearArchive, setConfirmClearArchive] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   // Новый сотрудник по умолчанию может оценивать — чтобы сразу появлялся в списке оценщиков
   const [form, setForm] = useState({ full_name: "", role: "", can_evaluate: true });
@@ -81,11 +83,18 @@ function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["
     const { data, error } = await getSupabase().from("employees").select("*").order("full_name");
     if (error) {
       toast({ title: "Ошибка загрузки", description: error.message, variant: "destructive" });
-    } else {
-      setEmployees(data || []);
+      setLoading(false);
+      return;
     }
+    const list = data || [];
+    setEmployees(list);
     setLoading(false);
-  }, [toast]);
+    // Если вошедший пользователь больше не активен (удалил себя / в архиве) —
+    // немедленно выходим, потребуется повторная авторизация
+    if (currentUser && !list.some((e) => String(e.id) === currentUser.id && e.active)) {
+      logout();
+    }
+  }, [toast, currentUser, logout]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -152,14 +161,31 @@ function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["
 
   const deleteEmployee = async () => {
     if (!editTarget) return;
-    const deletingSelf = String(editTarget.id) === currentUser?.id;
     const { error } = await getSupabase().from("employees").delete().eq("id", editTarget.id);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Сотрудник удалён" });
     setEditTarget(null);
     setConfirmDelete(false);
-    // Удалил сам себя → немедленно выходим, требуется повторная авторизация
-    if (deletingSelf) { logout(); return; }
+    // load() сам выйдет из сессии, если удалён текущий пользователь
+    load();
+  };
+
+  // Окончательное удаление из архива
+  const deleteFromArchive = async () => {
+    if (!archiveDeleteTarget) return;
+    const { error } = await getSupabase().from("employees").delete().eq("id", archiveDeleteTarget.id);
+    if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Удалён из архива" });
+    setArchiveDeleteTarget(null);
+    load();
+  };
+
+  // Полная очистка архива (все неактивные)
+  const clearArchive = async () => {
+    const { error } = await getSupabase().from("employees").delete().eq("active", false);
+    if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Архив очищен" });
+    setConfirmClearArchive(false);
     load();
   };
 
@@ -261,17 +287,38 @@ function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["
                   <div className="text-[15px] font-medium truncate" style={{ color: "#000" }}>{emp.full_name}</div>
                   <div className="text-[13px]" style={{ color: "rgba(60,60,67,0.5)" }}>{emp.role}</div>
                 </div>
-                <button
-                  onClick={() => toggleActive(emp)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
-                  style={{ background: "rgba(52,199,89,0.1)" }}
-                  title="Вернуть из архива"
-                >
-                  <Plus className="h-3.5 w-3.5" style={{ color: "#34C759" }} />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => toggleActive(emp)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
+                    style={{ background: "rgba(52,199,89,0.1)" }}
+                    title="Вернуть из архива"
+                  >
+                    <Plus className="h-3.5 w-3.5" style={{ color: "#34C759" }} />
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setArchiveDeleteTarget(emp)}
+                      className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-60"
+                      style={{ background: "rgba(255,59,48,0.1)" }}
+                      title="Удалить навсегда"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" style={{ color: "#FF3B30" }} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
+          {isAdmin && inactiveEmps.length > 1 && (
+            <button
+              onClick={() => setConfirmClearArchive(true)}
+              className="w-full mt-2 py-2.5 rounded-[12px] text-[14px] font-medium flex items-center justify-center gap-1.5 active:opacity-60"
+              style={{ background: "rgba(255,59,48,0.08)", color: "#FF3B30" }}
+            >
+              <Trash2 className="h-4 w-4" /> Очистить весь архив
+            </button>
+          )}
         </div>
       )}
 
@@ -370,6 +417,58 @@ function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["
                 {confirmDelete ? "Точно удалить навсегда?" : "Удалить сотрудника"}
               </motion.button>
             )}
+          </IosSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Подтверждение: удалить одного из архива */}
+      <AnimatePresence>
+        {archiveDeleteTarget && (
+          <IosSheet title="Удалить навсегда?" onClose={() => setArchiveDeleteTarget(null)}>
+            <p className="text-[15px] px-1 mb-4" style={{ color: "rgba(60,60,67,0.7)" }}>
+              «{archiveDeleteTarget.full_name}» будет удалён безвозвратно. Старые оценки этого сотрудника останутся в истории.
+            </p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={deleteFromArchive}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
+              style={{ background: "#FF3B30", color: "#fff" }}
+            >
+              <Trash2 className="h-5 w-5" /> Удалить
+            </motion.button>
+            <button
+              onClick={() => setArchiveDeleteTarget(null)}
+              className="w-full h-[48px] rounded-[16px] text-[16px] font-semibold mt-3"
+              style={{ background: "rgba(118,118,128,0.12)", color: "#007AFF" }}
+            >
+              Отмена
+            </button>
+          </IosSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Подтверждение: очистить весь архив */}
+      <AnimatePresence>
+        {confirmClearArchive && (
+          <IosSheet title="Очистить архив?" onClose={() => setConfirmClearArchive(false)}>
+            <p className="text-[15px] px-1 mb-4" style={{ color: "rgba(60,60,67,0.7)" }}>
+              Все {inactiveEmps.length} сотрудник(ов) из архива будут удалены безвозвратно. Старые оценки останутся в истории.
+            </p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={clearArchive}
+              className="w-full h-[52px] rounded-[16px] text-[17px] font-semibold flex items-center justify-center gap-2"
+              style={{ background: "#FF3B30", color: "#fff" }}
+            >
+              <Trash2 className="h-5 w-5" /> Очистить архив
+            </motion.button>
+            <button
+              onClick={() => setConfirmClearArchive(false)}
+              className="w-full h-[48px] rounded-[16px] text-[16px] font-semibold mt-3"
+              style={{ background: "rgba(118,118,128,0.12)", color: "#007AFF" }}
+            >
+              Отмена
+            </button>
           </IosSheet>
         )}
       </AnimatePresence>
