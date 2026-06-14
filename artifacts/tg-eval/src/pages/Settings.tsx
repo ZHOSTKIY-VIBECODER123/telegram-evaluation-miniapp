@@ -83,11 +83,18 @@ function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["
     const { data, error } = await getSupabase().from("employees").select("*").order("full_name");
     if (error) {
       toast({ title: "Ошибка загрузки", description: error.message, variant: "destructive" });
-    } else {
-      setEmployees(data || []);
+      setLoading(false);
+      return;
     }
+    const list = data || [];
+    setEmployees(list);
     setLoading(false);
-  }, [toast]);
+    // Если вошедший пользователь больше не активен (удалил себя / в архиве) —
+    // немедленно выходим, потребуется повторная авторизация
+    if (currentUser && !list.some((e) => String(e.id) === currentUser.id && e.active)) {
+      logout();
+    }
+  }, [toast, currentUser, logout]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -154,14 +161,12 @@ function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["
 
   const deleteEmployee = async () => {
     if (!editTarget) return;
-    const deletingSelf = String(editTarget.id) === currentUser?.id;
     const { error } = await getSupabase().from("employees").delete().eq("id", editTarget.id);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Сотрудник удалён" });
     setEditTarget(null);
     setConfirmDelete(false);
-    // Удалил сам себя → немедленно выходим, требуется повторная авторизация
-    if (deletingSelf) { logout(); return; }
+    // load() сам выйдет из сессии, если удалён текущий пользователь
     load();
   };
 
