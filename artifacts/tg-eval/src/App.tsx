@@ -4,8 +4,10 @@ import { AnimatePresence } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { EvaluationProvider } from "@/context/EvaluationContext";
+import { CurrentUserProvider, useCurrentUser } from "@/context/CurrentUserContext";
 import { AppLayout } from "@/components/AppLayout";
 
+import Auth from "@/pages/Auth";
 import ChecklistSelection from "@/pages/ChecklistSelection";
 import EmployeeSelection from "@/pages/EmployeeSelection";
 import EvaluationForm from "@/pages/EvaluationForm";
@@ -38,19 +40,40 @@ function Router() {
   );
 }
 
+// Гейт авторизации: пока не вошли — показываем экран входа
+function Gate() {
+  const { currentUser, loading } = useCurrentUser();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[100dvh]">
+        <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,122,255,0.2)", borderTopColor: "#007AFF" }} />
+      </div>
+    );
+  }
+
+  if (!currentUser) return <Auth />;
+
+  return (
+    <AppLayout>
+      <Router />
+    </AppLayout>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <EvaluationProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppLayout>
-              <Router />
-            </AppLayout>
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </EvaluationProvider>
+      <CurrentUserProvider>
+        <EvaluationProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Gate />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </EvaluationProvider>
+      </CurrentUserProvider>
     </QueryClientProvider>
   );
 }

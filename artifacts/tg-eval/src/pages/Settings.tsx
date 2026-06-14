@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/context/CurrentUserContext";
+import { ROLES, ADMIN_ROLE } from "@/data/roles";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Pencil, Trash2, ChevronDown,
-  ArrowUp, ArrowDown, X, Check, Link2,
+  ArrowUp, ArrowDown, X, Check, LogOut,
 } from "lucide-react";
-
-/* ─── Справочник ролей ───────────────────────────── */
-const ROLES = [
-  "Руководитель отдела по привлечению и Бизнес Поддержки",
-  "Руководитель отдела по привлечению",
-  "Team Leader",
-  "Менеджер по привлечению партнеров",
-] as const;
-const ADMIN_ROLE = ROLES[0];
 
 type Employee = {
   id: number;
@@ -22,7 +15,6 @@ type Employee = {
   role: string;
   can_evaluate: boolean;
   active: boolean;
-  telegram_id?: number | null;
 };
 
 type Question = { id: number; question_text: string; sort_order: number };
@@ -36,37 +28,10 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
-const getTgId = (): number | undefined =>
-  (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id;
-
 export default function Settings() {
   const [tab, setTab] = useState<TabKey>("employees");
   const { toast } = useToast();
-
-  // Сотрудники загружаются здесь, т.к. от них зависят права доступа всех вкладок
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [empLoading, setEmpLoading] = useState(true);
-
-  const loadEmployees = useCallback(async () => {
-    const { data, error } = await getSupabase().from("employees").select("*").order("full_name");
-    if (error) {
-      toast({ title: "Ошибка загрузки", description: error.message, variant: "destructive" });
-    } else {
-      setEmployees(data || []);
-    }
-    setEmpLoading(false);
-  }, [toast]);
-
-  useEffect(() => { loadEmployees(); }, [loadEmployees]);
-
-  /* Права доступа:
-     - если ни один сотрудник не привязан к Telegram → bootstrap-режим (доступ всем)
-     - иначе админ = активный сотрудник с ролью ADMIN_ROLE, чей telegram_id совпадает с текущим */
-  const tgId = getTgId();
-  const anyLinked = employees.some((e) => e.telegram_id != null);
-  const me = tgId != null ? employees.find((e) => Number(e.telegram_id) === Number(tgId)) : undefined;
-  const bootstrap = !empLoading && !anyLinked;
-  const isAdmin = empLoading ? false : bootstrap || (me?.role === ADMIN_ROLE && me.active);
+  const { isAdmin } = useCurrentUser();
 
   return (
     <div className="max-w-[430px] mx-auto min-h-[100dvh]">
@@ -93,17 +58,7 @@ export default function Settings() {
           ))}
         </div>
 
-        {tab === "employees" && (
-          <EmployeesTab
-            toast={toast}
-            employees={employees}
-            loading={empLoading}
-            onReload={loadEmployees}
-            isAdmin={isAdmin}
-            bootstrap={bootstrap}
-            tgId={tgId}
-          />
-        )}
+        {tab === "employees" && <EmployeesTab toast={toast} isAdmin={isAdmin} />}
         {tab === "checklists" && <ChecklistsTab toast={toast} isAdmin={isAdmin} />}
         {tab === "roles" && <RolesTab />}
       </div>
@@ -112,22 +67,26 @@ export default function Settings() {
 }
 
 /* ─── EMPLOYEES TAB ──────────────────────────────── */
-function EmployeesTab({
-  toast, employees, loading, onReload, isAdmin, bootstrap, tgId,
-}: {
-  toast: ReturnType<typeof useToast>["toast"];
-  employees: Employee[];
-  loading: boolean;
-  onReload: () => void;
-  isAdmin: boolean;
-  bootstrap: boolean;
-  tgId?: number;
-}) {
+function EmployeesTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>["toast"]; isAdmin: boolean }) {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editTarget, setEditTarget] = useState<Employee | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   // Новый сотрудник по умолчанию может оценивать — чтобы сразу появлялся в списке оценщиков
   const [form, setForm] = useState({ full_name: "", role: "", can_evaluate: true });
+
+  const load = useCallback(async () => {
+    const { data, error } = await getSupabase().from("employees").select("*").order("full_name");
+    if (error) {
+      toast({ title: "Ошибка загрузки", description: error.message, variant: "destructive" });
+    } else {
+      setEmployees(data || []);
+    }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
 
   const saveNew = async () => {
     if (!form.full_name.trim() || !form.role) {
@@ -144,7 +103,7 @@ function EmployeesTab({
     toast({ title: "Сотрудник добавлен ✓" });
     setShowAdd(false);
     setForm({ full_name: "", role: "", can_evaluate: true });
-    onReload();
+    load();
   };
 
   const saveEdit = async () => {
@@ -181,13 +140,13 @@ function EmployeesTab({
 
     toast({ title: "Сохранено ✓" });
     setEditTarget(null);
-    onReload();
+    load();
   };
 
   const toggleActive = async (emp: Employee) => {
     const { error } = await getSupabase().from("employees").update({ active: !emp.active }).eq("id", emp.id);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
-    onReload();
+    load();
   };
 
   const deleteEmployee = async () => {
@@ -197,26 +156,7 @@ function EmployeesTab({
     toast({ title: "Сотрудник удалён" });
     setEditTarget(null);
     setConfirmDelete(false);
-    onReload();
-  };
-
-  const linkTelegram = async () => {
-    if (!editTarget || tgId == null) return;
-    const sb = getSupabase();
-    // Один Telegram — один сотрудник: снимаем привязку с остальных
-    await sb.from("employees").update({ telegram_id: null }).eq("telegram_id", tgId);
-    const { error } = await sb.from("employees").update({ telegram_id: tgId }).eq("id", editTarget.id);
-    if (error) {
-      toast({
-        title: "Ошибка привязки",
-        description: `${error.message}. Возможно, в таблице employees нет колонки telegram_id.`,
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({ title: "Telegram привязан ✓" });
-    setEditTarget({ ...editTarget, telegram_id: tgId });
-    onReload();
+    load();
   };
 
   const activeEmps = employees.filter((e) => e.active);
@@ -232,13 +172,6 @@ function EmployeesTab({
 
   return (
     <div className="space-y-4">
-      {bootstrap && (
-        <div className="rounded-2xl p-4 text-[13px] leading-snug" style={{ background: "rgba(255,149,0,0.12)", color: "#B36B00" }}>
-          Права администратора не настроены — доступ открыт всем. Чтобы ограничить доступ:
-          откройте карточку сотрудника с ролью «{ADMIN_ROLE}» из Telegram и нажмите «Привязать мой Telegram».
-        </div>
-      )}
-
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={() => setShowAdd(true)}
@@ -268,12 +201,7 @@ function EmployeesTab({
                   {emp.full_name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[15px] font-medium truncate flex items-center gap-1.5" style={{ color: "#000" }}>
-                    {emp.full_name}
-                    {emp.telegram_id != null && (
-                      <Link2 className="h-3 w-3 flex-shrink-0" style={{ color: "#34C759" }} />
-                    )}
-                  </div>
+                  <div className="text-[15px] font-medium truncate" style={{ color: "#000" }}>{emp.full_name}</div>
                   <div className="text-[13px] flex items-center gap-2" style={{ color: "rgba(60,60,67,0.5)" }}>
                     <span className="truncate">{emp.role}</span>
                     {emp.can_evaluate && (
@@ -413,27 +341,6 @@ function EmployeesTab({
                 onChange={(v) => setEditTarget((t) => t && ({ ...t, can_evaluate: v }))}
               />
             </div>
-
-            {/* Привязка Telegram (для прав администратора) */}
-            {isAdmin && tgId != null && (
-              Number(editTarget.telegram_id) === Number(tgId) ? (
-                <div
-                  className="flex items-center justify-center gap-2 px-4 py-3.5 rounded-[16px] mt-3 text-[15px] font-medium"
-                  style={{ background: "rgba(52,199,89,0.1)", color: "#34C759" }}
-                >
-                  <Link2 className="h-4 w-4" /> Telegram привязан
-                </div>
-              ) : (
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={linkTelegram}
-                  className="w-full px-4 py-3.5 rounded-[16px] mt-3 text-[15px] font-medium flex items-center justify-center gap-2"
-                  style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}
-                >
-                  <Link2 className="h-4 w-4" /> Привязать мой Telegram
-                </motion.button>
-              )
-            )}
 
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -666,7 +573,7 @@ function ChecklistsTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>[
     <div className="space-y-4">
       {!isAdmin && (
         <div className="rounded-2xl p-4 text-[13px] leading-snug" style={{ background: "rgba(0,122,255,0.08)", color: "#0A6CD6" }}>
-          Режим просмотра. Редактировать чек-листы может только «{ADMIN_ROLE}» (вход через Telegram).
+          Режим просмотра. Редактировать чек-листы может только «{ADMIN_ROLE}».
         </div>
       )}
 
@@ -993,14 +900,52 @@ function MiniBtn({
 
 /* ─── ROLES TAB ──────────────────────────────────── */
 function RolesTab() {
+  const { currentUser, isAdmin, logout } = useCurrentUser();
   const info = [
-    { label: "Версия", value: "1.2.0" },
+    { label: "Версия", value: "1.3.0" },
     { label: "База данных", value: "Supabase" },
     { label: "Платформа", value: "Telegram Mini App" },
   ];
 
   return (
     <div className="space-y-4">
+      {/* Текущий пользователь */}
+      {currentUser && (
+        <div>
+          <p className="text-[13px] font-semibold px-1 mb-2" style={{ color: "rgba(60,60,67,0.6)" }}>
+            ВЫ ВОШЛИ КАК
+          </p>
+          <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center text-[17px] font-bold flex-shrink-0"
+                style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}
+              >
+                {currentUser.name.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] font-medium truncate flex items-center gap-1.5" style={{ color: "#000" }}>
+                  {currentUser.name}
+                  {isAdmin && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: "rgba(0,122,255,0.1)", color: "#007AFF" }}>
+                      Админ
+                    </span>
+                  )}
+                </div>
+                <div className="text-[13px] truncate" style={{ color: "rgba(60,60,67,0.5)" }}>{currentUser.role}</div>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 text-[15px] font-medium active:opacity-60"
+              style={{ borderTop: "0.5px solid rgba(60,60,67,0.12)", color: "#FF3B30" }}
+            >
+              <LogOut className="h-4 w-4" /> Сменить пользователя
+            </button>
+          </div>
+        </div>
+      )}
+
       <div>
         <p className="text-[13px] font-semibold px-1 mb-2" style={{ color: "rgba(60,60,67,0.6)" }}>
           СПРАВОЧНИК РОЛЕЙ
@@ -1023,7 +968,6 @@ function RolesTab() {
         </div>
         <p className="text-[12px] px-1 mt-2 leading-snug" style={{ color: "rgba(60,60,67,0.45)" }}>
           Администратор может менять роли сотрудников, удалять сотрудников и редактировать чек-листы.
-          Права определяются по привязке Telegram в карточке сотрудника.
         </p>
       </div>
 
