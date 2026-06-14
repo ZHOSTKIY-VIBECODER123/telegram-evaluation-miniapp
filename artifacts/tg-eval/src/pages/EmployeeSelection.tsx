@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useEvaluation } from "@/context/EvaluationContext";
 import { useCurrentUser } from "@/context/CurrentUserContext";
 import { useEmployees } from "@/hooks/useEmployees";
+import { canEvaluateRole, canEvaluateAnyone } from "@/data/roles";
 
 export default function EmployeeSelection() {
   const [, setLocation] = useLocation();
@@ -32,9 +33,11 @@ export default function EmployeeSelection() {
     setLocation("/evaluate");
   };
 
-  // Показываем всех активных сотрудников, кроме самого оценщика (вошедшего)
+  // Список оцениваемых ограничен иерархией ролей вошедшего пользователя
+  const evaluatesAnyone = currentUser ? canEvaluateAnyone(currentUser.role) : false;
   const filteredEmployees = employees
     .filter((emp) => emp.id !== currentUser?.id)
+    .filter((emp) => (currentUser ? canEvaluateRole(currentUser.role, emp.role) : false))
     .filter(
       (emp) =>
         emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -93,13 +96,22 @@ export default function EmployeeSelection() {
           </div>
         )}
 
-        {!loading && filteredEmployees.length === 0 && (
+        {!loading && !evaluatesAnyone && (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-2">
+            <div className="text-4xl">🔒</div>
+            <p className="text-[15px]" style={{ color: "rgba(60,60,67,0.5)" }}>
+              Ваша роль не предусматривает оценку сотрудников
+            </p>
+          </div>
+        )}
+
+        {!loading && evaluatesAnyone && filteredEmployees.length === 0 && (
           <div className="flex justify-center py-16 text-[15px]" style={{ color: "rgba(60,60,67,0.5)" }}>
             Сотрудники не найдены
           </div>
         )}
 
-        {!loading && filteredEmployees.length > 0 && (
+        {!loading && evaluatesAnyone && filteredEmployees.length > 0 && (
           <div
             className="rounded-[20px] overflow-hidden"
             style={{ background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}

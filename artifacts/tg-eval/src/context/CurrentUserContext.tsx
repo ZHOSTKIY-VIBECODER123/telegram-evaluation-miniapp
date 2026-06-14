@@ -27,19 +27,43 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Восстанавливаем личность из localStorage
+  // Восстанавливаем личность из localStorage и проверяем, что сотрудник
+  // всё ещё существует и активен в БД (иначе удалённый/архивный юзер
+  // продолжал бы работать из устаревшей localStorage-сессии)
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
+    (async () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
         const parsed = JSON.parse(raw) as CurrentUser;
-        if (parsed?.id && parsed?.name && parsed?.role) setCurrentUser(parsed);
+        if (!parsed?.id || !parsed?.name || !parsed?.role) return;
+
+        const { data, error } = await getSupabase()
+          .from("employees")
+          .select("id, full_name, role, active")
+          .eq("id", parsed.id)
+          .limit(1);
+
+        // Сеть/БД недоступны — не выкидываем (fail-open), доверяем localStorage
+        if (error) { setCurrentUser(parsed); return; }
+
+        const emp = data?.[0];
+        if (!emp || emp.active === false) {
+          // Удалён или в архиве → сбрасываем сессию, нужен повторный вход
+          localStorage.removeItem(STORAGE_KEY);
+          return;
+        }
+
+        // Синхронизируем имя/роль с БД (вдруг админ изменил)
+        const fresh: CurrentUser = { id: String(emp.id), name: emp.full_name, role: emp.role };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+        setCurrentUser(fresh);
+      } catch {
+        // повреждённое значение — игнорируем, покажем экран входа
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      // повреждённое значение — игнорируем, покажем экран входа
-    } finally {
-      setLoading(false);
-    }
+    })();
   }, []);
 
   const login = useCallback(async (name: string, role: string) => {
