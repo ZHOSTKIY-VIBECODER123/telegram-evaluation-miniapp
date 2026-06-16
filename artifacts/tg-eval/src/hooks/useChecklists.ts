@@ -3,7 +3,7 @@ import { getSupabase } from "@/lib/supabase";
 import { Checklist, ChecklistSection } from "@/data/mockData";
 
 type DbQuestion = { id: number; question_text: string; sort_order: number };
-type DbSection = { id: number; title: string; sort_order: number; checklist_questions: DbQuestion[] };
+type DbSection = { id: number; name: string; sort_order: number; checklist_questions: DbQuestion[] };
 type DbChecklistWithNested = { id: number; name: string; checklist_sections: DbSection[] };
 
 function mapToChecklist(row: DbChecklistWithNested): Checklist {
@@ -13,7 +13,7 @@ function mapToChecklist(row: DbChecklistWithNested): Checklist {
 
   const sections: ChecklistSection[] = sortedSections.map((sec) => ({
     id: String(sec.id),
-    title: sec.title ?? "Раздел",
+    title: sec.name ?? "Раздел",
     questions: [...(sec.checklist_questions || [])]
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
       .map((q) => q.question_text),
