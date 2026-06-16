@@ -18,7 +18,7 @@ type Employee = {
 };
 
 type Question = { id: number; question_text: string; sort_order: number };
-type Section = { id: number; title: string | null; sort_order: number; checklist_questions: Question[] };
+type Section = { id: number; name: string | null; sort_order: number; checklist_questions: Question[] };
 type Checklist = { id: number; name: string; checklist_sections: Section[] };
 
 const TABS = [
@@ -541,7 +541,7 @@ function ChecklistsTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>[
     if (!newName.trim()) return;
     const { data: cl, error } = await getSupabase().from("checklists").insert({ name: newName.trim() }).select().single();
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
-    const { error: secError } = await getSupabase().from("checklist_sections").insert({ checklist_id: cl.id, title: "Блок 1", sort_order: 0 });
+    const { error: secError } = await getSupabase().from("checklist_sections").insert({ checklist_id: cl.id, name: "Блок 1", sort_order: 0 });
     if (secError) {
       await getSupabase().from("checklists").delete().eq("id", cl.id);
       toast({ title: "Ошибка", description: "Не удалось создать блок", variant: "destructive" });
@@ -562,7 +562,7 @@ function ChecklistsTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>[
       : -1;
     const { error } = await getSupabase().from("checklist_sections").insert({
       checklist_id: addSectionSheet.checklistId,
-      title: newSectionTitle.trim(),
+      name: newSectionTitle.trim(),
       sort_order: maxOrder + 1,
     });
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
@@ -576,7 +576,7 @@ function ChecklistsTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>[
     if (!renameSectionSheet || !renameSectionSheet.title.trim()) return;
     const { error } = await getSupabase()
       .from("checklist_sections")
-      .update({ title: renameSectionSheet.title.trim() })
+      .update({ name: renameSectionSheet.title.trim() })
       .eq("id", renameSectionSheet.sectionId);
     if (error) { toast({ title: "Ошибка", description: error.message, variant: "destructive" }); return; }
     setRenameSectionSheet(null);
@@ -732,7 +732,7 @@ function ChecklistsTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>[
                         {/* Заголовок блока + управление */}
                         <div className="flex items-center gap-1 mb-2">
                           <p className="flex-1 text-[12px] font-semibold min-w-0 truncate" style={{ color: "rgba(60,60,67,0.45)", letterSpacing: "0.5px" }}>
-                            {(sec.title ?? "Блок").toUpperCase()}
+                            {(sec.name ?? "Блок").toUpperCase()}
                           </p>
                           {isAdmin && (
                             <div className="flex gap-1 flex-shrink-0">
@@ -742,12 +742,12 @@ function ChecklistsTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>[
                               <MiniBtn disabled={si === sortedSections.length - 1} onClick={() => moveSection(cl, si, 1)}>
                                 <ArrowDown className="h-3 w-3" />
                               </MiniBtn>
-                              <MiniBtn onClick={() => setRenameSectionSheet({ sectionId: sec.id, title: sec.title ?? "" })}>
+                              <MiniBtn onClick={() => setRenameSectionSheet({ sectionId: sec.id, title: sec.name ?? "" })}>
                                 <Pencil className="h-3 w-3" />
                               </MiniBtn>
                               <MiniBtn
                                 danger
-                                onClick={() => setDeleteSectionSheet({ sectionId: sec.id, title: sec.title ?? "Блок", count: sec.checklist_questions.length })}
+                                onClick={() => setDeleteSectionSheet({ sectionId: sec.id, title: sec.name ?? "Блок", count: sec.checklist_questions.length })}
                               >
                                 <Trash2 className="h-3 w-3" />
                               </MiniBtn>
@@ -798,7 +798,7 @@ function ChecklistsTab({ toast, isAdmin }: { toast: ReturnType<typeof useToast>[
 
                         {isAdmin && (
                           <button
-                            onClick={() => { setAddQuestionSheet({ sectionId: sec.id, sectionTitle: sec.title ?? "Блок" }); setNewQuestion(""); }}
+                            onClick={() => { setAddQuestionSheet({ sectionId: sec.id, sectionTitle: sec.name ?? "Блок" }); setNewQuestion(""); }}
                             className="mt-2 flex items-center gap-1.5 text-[14px] active:opacity-60"
                             style={{ color: "#007AFF" }}
                           >
