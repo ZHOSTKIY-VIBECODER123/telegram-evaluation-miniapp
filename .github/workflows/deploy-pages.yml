@@ -1,0 +1,54 @@
+name: Deploy tg-eval to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build tg-eval
+        env:
+          PORT: "8080"
+          BASE_PATH: "/telegram-evaluation-miniapp/"
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: pnpm --filter tg-eval build
+      - name: SPA fallback + disable Jekyll
+        run: |
+          cp artifacts/tg-eval/dist/public/index.html artifacts/tg-eval/dist/public/404.html
+          touch artifacts/tg-eval/dist/public/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: artifacts/tg-eval/dist/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
